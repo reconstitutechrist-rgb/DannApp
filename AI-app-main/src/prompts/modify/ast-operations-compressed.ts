@@ -57,6 +57,25 @@ AST_ADD_AUTHENTICATION - Complete auth system (ONE operation)
 { "type": "AST_ADD_AUTHENTICATION", "loginFormStyle": "styled", "includeEmailField": true }
 Generates: login form, state, handlers, conditional rendering, logout button
 
+AST_ADD_CONTEXT_PROVIDER - React Context scaffolding
+{ "type": "AST_ADD_CONTEXT_PROVIDER", "contextName": "Auth", "initialValue": "{ user: null }",
+  "valueType": "{ user: User | null }", "stateVariables": [
+    { "name": "user", "initialValue": "null", "type": "User | null" }
+  ]}
+Generates: Context, Provider, custom hook with error handling
+
+AST_ADD_ZUSTAND_STORE - Zustand store generation
+{ "type": "AST_ADD_ZUSTAND_STORE", "storeName": "useAppStore",
+  "initialState": { "count": 0 }, "actions": [
+    { "name": "increment", "params": [], "body": "({ count: state.count + 1 })" }
+  ], "persist": true, "persistKey": "app-store" }
+Generates: Complete Zustand store with TypeScript types and optional persistence
+
+AST_EXTRACT_COMPONENT - Extract JSX to new component
+{ "type": "AST_EXTRACT_COMPONENT", "targetJSX": "<div>...</div>",
+  "componentName": "Card", "propTypes": { "title": "string" }}
+Generates: New component file with props interface
+
 **Hook Selection Guide:**
 - Simple state? → AST_ADD_STATE
 - Side effects? → AST_ADD_USEEFFECT
@@ -64,4 +83,12 @@ Generates: login form, state, handlers, conditional rendering, logout button
 - Expensive calc? → AST_ADD_MEMO
 - Event handler? → AST_ADD_CALLBACK
 - Complex state? → AST_ADD_REDUCER
+- Global state (Context)? → AST_ADD_CONTEXT_PROVIDER
+- Global state (Zustand)? → AST_ADD_ZUSTAND_STORE
+- Refactor large component? → AST_EXTRACT_COMPONENT
+
+**Additional Capabilities:**
+- Test Generation: Available via /api/generate-tests endpoint
+  Analyzes components and generates Jest/Vitest tests automatically
+  Includes: rendering, props, events, state, snapshots, accessibility tests
 `.trim();

@@ -7,6 +7,7 @@ import FullAppPreview from './FullAppPreview';
 import DiffPreview from './DiffPreview';
 import ThemeSelector from './ThemeSelector';
 import TemplateSelector from './TemplateSelector';
+import PhaseProgress from './PhaseProgress';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
@@ -1238,6 +1239,19 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
       setChatMessages(prev => [...prev, successMessage]);
       setActiveTab('preview');
 
+      // Handle extraction suggestions if any
+      if (result.extractionSuggestions && result.extractionSuggestions.length > 0) {
+        for (const suggestion of result.extractionSuggestions) {
+          const extractionMessage: ChatMessage = {
+            id: (Date.now() + Math.random()).toString(),
+            role: 'assistant',
+            content: suggestion.message,
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, extractionMessage]);
+        }
+      }
+
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       
@@ -1735,6 +1749,16 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                     </div>
                   </div>
                 ))}
+
+                {/* Phase Progress Indicator */}
+                {newAppStagePlan && newAppStagePlan.phases && newAppStagePlan.phases.length > 0 && (
+                  <div className="my-6">
+                    <PhaseProgress
+                      phases={newAppStagePlan.phases}
+                      currentPhase={newAppStagePlan.currentPhase}
+                    />
+                  </div>
+                )}
 
                 {isGenerating && (
                   <div className="flex justify-start">
