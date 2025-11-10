@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import CodePreview from './CodePreview';
 import FullAppPreview from './FullAppPreview';
 import DiffPreview from './DiffPreview';
@@ -1626,26 +1627,23 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Main Content */}
-        <div className={`grid gap-6 ${
-          layoutMode === 'stacked'
-            ? 'grid-cols-1'
-            : layoutMode === 'preview-first'
-            ? 'grid-cols-1 lg:grid-cols-12'
-            : layoutMode === 'code-first'
-            ? 'grid-cols-1 lg:grid-cols-12'
-            : 'grid-cols-1 lg:grid-cols-12'
-        }`}>
+        <PanelGroup
+          direction={layoutMode === 'stacked' ? 'vertical' : 'horizontal'}
+          className="h-[calc(100vh-180px)]"
+          autoSaveId={`ai-builder-panels-${layoutMode}`}
+        >
           {/* Chat/Conversation Panel - Left Side */}
-          <div className={
-            layoutMode === 'stacked'
-              ? 'col-span-1'
-              : layoutMode === 'preview-first'
-              ? 'lg:col-span-3'
-              : layoutMode === 'code-first'
-              ? 'lg:col-span-8'
-              : 'lg:col-span-5'
-          }>
-            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
+          <Panel
+            defaultSize={
+              layoutMode === 'stacked' ? 50
+                : layoutMode === 'preview-first' ? 25
+                : layoutMode === 'code-first' ? 70
+                : 42
+            }
+            minSize={20}
+            maxSize={80}
+          >
+            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-full">
               {/* Chat Header */}
               <div className="px-6 py-4 border-b border-white/10 bg-black/20">
                 <div className="flex items-center justify-between mb-3">
@@ -1801,19 +1799,33 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </div>
               </div>
             </div>
-          </div>
+          </Panel>
+
+          {/* Resizable Divider */}
+          <PanelResizeHandle className={`
+            ${layoutMode === 'stacked' ? 'h-2 my-2' : 'w-2 mx-2'}
+            bg-white/10 hover:bg-blue-500/50 transition-colors rounded-full
+            ${layoutMode === 'stacked' ? 'cursor-row-resize' : 'cursor-col-resize'}
+            flex items-center justify-center group
+          `}>
+            <div className={`
+              ${layoutMode === 'stacked' ? 'w-12 h-1' : 'w-1 h-12'}
+              bg-white/20 group-hover:bg-blue-400 transition-colors rounded-full
+            `} />
+          </PanelResizeHandle>
 
           {/* Preview/Code Panel - Right Side */}
-          <div className={
-            layoutMode === 'stacked'
-              ? 'col-span-1'
-              : layoutMode === 'preview-first'
-              ? 'lg:col-span-9'
-              : layoutMode === 'code-first'
-              ? 'lg:col-span-4'
-              : 'lg:col-span-7'
-          }>
-            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+          <Panel
+            defaultSize={
+              layoutMode === 'stacked' ? 50
+                : layoutMode === 'preview-first' ? 75
+                : layoutMode === 'code-first' ? 30
+                : 58
+            }
+            minSize={20}
+            maxSize={80}
+          >
+            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden h-full flex flex-col">
               {/* Tabs */}
               <div className="flex items-center gap-2 px-6 py-4 border-b border-white/10 bg-black/20">
                 <button
@@ -2044,7 +2056,9 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               )}
             </div>
           </div>
-        </div>
+          </Panel>
+        </PanelGroup>
+      </div>
       )}
 
       {/* Change Approval Modal */}
