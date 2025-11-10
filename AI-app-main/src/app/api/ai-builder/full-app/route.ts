@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const perfTracker = new PerformanceTracker();
   
   try {
-    const { prompt, conversationHistory, isModification, currentAppName, image, hasImage } = await request.json();
+    const { prompt, conversationHistory, isModification, currentAppName, image, hasImage, templateGuidance, templateName } = await request.json();
     perfTracker.checkpoint('request_parsed');
     
     // Log request start after parsing body
@@ -54,6 +54,13 @@ INTERNAL_PLAN SYSTEM (Hidden from user):
 - Track architecture, completed features, deferred features
 - Update on modifications for consistency
 - Reference when extending app
+
+${templateGuidance ? `
+ARCHITECTURE TEMPLATE GUIDANCE - ${templateName}:
+${templateGuidance}
+
+IMPORTANT: Follow the template structure closely, but adapt to the user's specific requirements.
+` : ''}
 
 ${isModification ? `
 MODIFICATION MODE for "${currentAppName}":

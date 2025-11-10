@@ -6,8 +6,10 @@ import CodePreview from './CodePreview';
 import FullAppPreview from './FullAppPreview';
 import DiffPreview from './DiffPreview';
 import ThemeSelector from './ThemeSelector';
+import TemplateSelector from './TemplateSelector';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
+import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
 
 // Base44-inspired layout with conversation-first design + your dark colors
 
@@ -140,6 +142,11 @@ export default function AIBuilder() {
   // Staging consent modal for new apps
   const [showNewAppStagingModal, setShowNewAppStagingModal] = useState(false);
   const [pendingNewAppRequest, setPendingNewAppRequest] = useState<string>('');
+
+  // Architecture Template Selection
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ArchitectureTemplate | null>(null);
+  const [pendingTemplateRequest, setPendingTemplateRequest] = useState<string>('');
 
   // Ref for auto-scrolling chat
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -635,38 +642,28 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
     
     const isQuestion = (hasQuestionWords && !hasBuildWords && !hasShowGiveBuild) || isMetaQuestion;
     
-    // NEW: Detect complex new app builds that should use staged approach
-    const newAppComplexityIndicators = [
-      'complete', 'full-featured', 'comprehensive', 'all features',
-      'everything', 'entire', 'full', 'advanced', 'complex',
-      'with authentication', 'with auth', 'with backend', 'with database',
-      'multiple pages', 'full stack', 'production-ready',
-      'e-commerce', 'social media', 'social network', 'marketplace',
-      'cms', 'content management', 'blog platform', 'forum'
-    ];
-    
-    const wordCount = userInput.split(' ').length;
-    const hasNewAppComplexityIndicators = newAppComplexityIndicators.some(indicator => 
-      input.includes(indicator)
-    );
-    
+    // NEW: Detect complex new app builds using architecture template detection
+    const complexityAnalysis = !currentComponent && !isQuestion ? detectComplexity(userInput) : null;
+
     // Check if this is a complex NEW app request (not a modification)
-    const isComplexNewApp = !currentComponent && 
-      !isQuestion && 
-      (wordCount > 40 || hasNewAppComplexityIndicators) &&
-      !isGenerating;
-    
-    // If complex new app detected, offer staged building
-    if (isComplexNewApp && currentMode === 'ACT') {
+    const isComplexNewApp = complexityAnalysis &&
+      (complexityAnalysis.complexity === 'MEDIUM' ||
+       complexityAnalysis.complexity === 'COMPLEX' ||
+       complexityAnalysis.complexity === 'VERY_COMPLEX') &&
+      !isGenerating &&
+      currentMode === 'ACT';
+
+    // If complex new app detected, show template selector first
+    if (isComplexNewApp) {
       // Check if user hasn't already been prompted recently
-      const recentlyPromptedForStaging = chatMessages.slice(-10).some(msg =>
-        msg.content.includes('Build in Phases?')
+      const recentlyPromptedForTemplate = chatMessages.slice(-10).some(msg =>
+        msg.content.includes('Choose Architecture Template')
       );
-      
-      if (!recentlyPromptedForStaging) {
-        setPendingNewAppRequest(userInput);
-        setShowNewAppStagingModal(true);
-        
+
+      if (!recentlyPromptedForTemplate) {
+        setPendingTemplateRequest(userInput);
+        setShowTemplateSelector(true);
+
         const userMessage: ChatMessage = {
           id: Date.now().toString(),
           role: 'user',
@@ -675,7 +672,7 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         };
         setChatMessages(prev => [...prev, userMessage]);
         setUserInput('');
-        return; // Wait for user decision
+        return; // Wait for template selection
       }
     }
 
@@ -787,6 +784,12 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
           currentAppName: null,
           includeCodeInResponse: isRequestingCode
         };
+
+        // Add architecture template guidance if template was selected
+        if (selectedTemplate) {
+          requestBody.templateGuidance = generateTemplatePrompt(selectedTemplate);
+          requestBody.templateName = selectedTemplate.name;
+        }
       }
 
       // Add image if uploaded
@@ -1499,6 +1502,19 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
   const handleLayoutChange = (mode: 'classic' | 'preview-first' | 'code-first' | 'stacked') => {
     setLayoutMode(mode);
     localStorage.setItem('layout-mode', mode);
+  };
+
+  // Handle architecture template selection
+  const handleTemplateSelect = (template: ArchitectureTemplate | null) => {
+    setSelectedTemplate(template);
+    setShowTemplateSelector(false);
+
+    // After template selection, show staging modal for phased building
+    if (pendingTemplateRequest) {
+      setPendingNewAppRequest(pendingTemplateRequest);
+      setShowNewAppStagingModal(true);
+      setPendingTemplateRequest('');
+    }
   };
 
   const filteredComponents = components.filter(comp =>
@@ -2511,6 +2527,18 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             </div>
           </div>
         </div>
+      )}
+
+      {/* Architecture Template Selector Modal */}
+      {showTemplateSelector && pendingTemplateRequest && (
+        <TemplateSelector
+          userRequest={pendingTemplateRequest}
+          onSelectTemplate={handleTemplateSelect}
+          onClose={() => {
+            setShowTemplateSelector(false);
+            setPendingTemplateRequest('');
+          }}
+        />
       )}
 
       {/* New App Staging Consent Modal */}
