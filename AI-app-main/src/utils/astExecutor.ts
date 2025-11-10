@@ -710,7 +710,7 @@ export async function executeASTOperation(
         }
 
         // Build context value
-        const  valueParts: string[] = [];
+        const valueParts: string[] = [];
         if (operation.stateVariables) {
           for (const stateVar of operation.stateVariables) {
             valueParts.push(`${stateVar.name}`);
@@ -760,9 +760,6 @@ export async function executeASTOperation(
         storeCode += `\n`;
 
         // Build state interface
-        const stateKeys = Object.keys(operation.initialState);
-        const actionNames = (operation.actions || []).map(a => a.name);
-
         storeCode += `interface StoreState {\n`;
         // Add state properties
         for (const [key, value] of Object.entries(operation.initialState)) {
@@ -803,7 +800,6 @@ export async function executeASTOperation(
         if (operation.actions) {
           for (const action of operation.actions) {
             const params = action.params || [];
-            const paramStr = params.map(p => p.name).join(', ');
             storeCode += `  ${action.name}: (${params.map(p => `${p.name}: ${p.type || 'any'}`).join(', ')}) => set((state) => ${action.body}),\n`;
           }
         }
@@ -828,7 +824,6 @@ export async function executeASTOperation(
       case 'AST_EXTRACT_COMPONENT': {
         // Extract component from JSX
         const componentName = operation.componentName;
-        const extractProps = operation.extractProps !== false;
 
         // For now, generate a basic extracted component template
         // In a real implementation, this would parse the targetJSX and extract variables

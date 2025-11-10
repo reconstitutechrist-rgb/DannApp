@@ -50,12 +50,12 @@ export default function PhaseProgress({ phases, currentPhase, onPhaseClick, comp
     }
   };
 
-  const getStatusIcon = (status: Phase['status']) => {
+  const getStatusIcon = (status: Phase['status'], phaseNumber: number) => {
     switch (status) {
       case 'complete': return '✓';
       case 'building': return '⟳';
       case 'error': return '✕';
-      default: return phase.number;
+      default: return phaseNumber;
     }
   };
 
@@ -147,7 +147,7 @@ export default function PhaseProgress({ phases, currentPhase, onPhaseClick, comp
                     flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center
                     text-white font-bold ${getStatusColor(phase.status)}
                   `}>
-                    {getStatusIcon(phase.status)}
+                    {getStatusIcon(phase.status, phase.number)}
                   </div>
 
                   {/* Phase Content */}

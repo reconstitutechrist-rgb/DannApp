@@ -188,12 +188,12 @@ export function generateTests(
 
   // Event handler tests
   if (analysis.hasEventHandlers && analysis.eventHandlers.length > 0) {
-    testCode += generateEventHandlerTests(analysis, testLibrary);
+    testCode += generateEventHandlerTests(analysis, framework);
   }
 
   // State tests
   if (analysis.hasState && analysis.stateVariables.length > 0) {
-    testCode += generateStateTests(analysis, testLibrary);
+    testCode += generateStateTests(analysis, framework);
   }
 
   // Snapshot test
@@ -245,8 +245,9 @@ function generateTestImports(
 function generateRenderTest(analysis: ComponentAnalysis, testLibrary: string): string {
   return `
   it('renders without crashing', () => {
-    const { container } = render(<${analysis.name} />);
-    expect(container).toBeInTheDocument();
+    render(<${analysis.name} />);
+    // Add specific assertions based on your component structure
+    expect(document.querySelector('body')).toBeInTheDocument();
   });
 \n`;
 }
@@ -261,8 +262,9 @@ function generatePropTests(analysis: ComponentAnalysis, testLibrary: string): st
   for (const prop of analysis.propNames.slice(0, 3)) {
     const testValue = getTestValueForProp(prop);
     tests += `    it('renders with ${prop} prop', () => {
-      render(<${analysis.name} ${prop}={${testValue}} />);
-      expect(screen.getByRole('complementary')).toBeInTheDocument();
+      const { container } = render(<${analysis.name} ${prop}={${testValue}} />);
+      expect(container).toBeInTheDocument();
+      // TODO: Add specific assertions for ${prop} prop
     });
 \n`;
   }
@@ -274,20 +276,23 @@ function generatePropTests(analysis: ComponentAnalysis, testLibrary: string): st
 /**
  * Generate event handler tests
  */
-function generateEventHandlerTests(analysis: ComponentAnalysis, testLibrary: string): string {
+function generateEventHandlerTests(analysis: ComponentAnalysis, framework: TestFramework): string {
+  const mockFn = framework === 'vitest' ? 'vi.fn()' : 'jest.fn()';
+
   let tests = `
   describe('Event Handlers', () => {\n`;
 
   for (const handler of analysis.eventHandlers.slice(0, 3)) {
-    const mockFn = handler.replace('on', 'handle');
+    const handlerName = handler.replace('on', 'handle');
     tests += `    it('calls ${handler} when triggered', () => {
-      const ${mockFn} = vi ? vi.fn() : jest.fn();
-      render(<${analysis.name} ${handler}={${mockFn}} />);
+      const ${handlerName} = ${mockFn};
+      render(<${analysis.name} ${handler}={${handlerName}} />);
 
-      const element = screen.getByRole('button');
-      fireEvent.click(element);
+      // TODO: Update selector based on your component structure
+      const element = document.querySelector('[data-testid="test-element"]') || document.querySelector('button');
+      if (element) fireEvent.click(element);
 
-      expect(${mockFn}).toHaveBeenCalled();
+      expect(${handlerName}).toHaveBeenCalled();
     });
 \n`;
   }
@@ -299,15 +304,15 @@ function generateEventHandlerTests(analysis: ComponentAnalysis, testLibrary: str
 /**
  * Generate state tests
  */
-function generateStateTests(analysis: ComponentAnalysis, testLibrary: string): string {
+function generateStateTests(analysis: ComponentAnalysis, framework: TestFramework): string {
   let tests = `
   describe('State Management', () => {\n`;
 
   for (const stateVar of analysis.stateVariables.slice(0, 2)) {
     tests += `    it('manages ${stateVar} state', () => {
-      render(<${analysis.name} />);
-      // Add state-specific assertions here
-      expect(screen.getByRole('complementary')).toBeInTheDocument();
+      const { container } = render(<${analysis.name} />);
+      // TODO: Add state-specific assertions for ${stateVar}
+      expect(container).toBeInTheDocument();
     });
 \n`;
   }
