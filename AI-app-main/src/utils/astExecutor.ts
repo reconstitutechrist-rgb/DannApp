@@ -107,6 +107,44 @@ export interface ASTAddReducerOperation {
   }>;
 }
 
+export interface ASTAddContextProviderOperation {
+  type: 'AST_ADD_CONTEXT_PROVIDER';
+  contextName: string;       // Context name (e.g., 'AuthContext')
+  providerName?: string;     // Provider component name (default: {contextName}Provider)
+  hookName?: string;         // Hook name (default: use{contextName})
+  initialValue: string;      // Initial context value (e.g., '{ user: null, login: () => {}, logout: () => {} }')
+  valueType?: string;        // TypeScript type for context value
+  includeState?: boolean;    // Whether to include useState in provider (default: true)
+  stateVariables?: Array<{
+    name: string;
+    initialValue: string;
+    type?: string;
+  }>;
+}
+
+export interface ASTAddZustandStoreOperation {
+  type: 'AST_ADD_ZUSTAND_STORE';
+  storeName: string;         // Store hook name (e.g., 'useAppStore')
+  storeFile?: string;        // File path to create store in (e.g., 'src/store/appStore.ts')
+  initialState: Record<string, any>; // Initial state object
+  actions?: Array<{
+    name: string;            // Action name (e.g., 'increment')
+    params?: Array<{name: string; type?: string}>;
+    body: string;            // Action implementation
+  }>;
+  persist?: boolean;         // Use zustand persist middleware (default: false)
+  persistKey?: string;       // LocalStorage key for persistence
+}
+
+export interface ASTExtractComponentOperation {
+  type: 'AST_EXTRACT_COMPONENT';
+  targetJSX: string;         // JSX code to extract or element selector
+  componentName: string;     // New component name
+  componentFile?: string;    // File to create component in (default: same directory)
+  extractProps?: boolean;    // Auto-detect and extract props (default: true)
+  propTypes?: Record<string, string>; // Explicit prop types
+}
+
 export type ASTOperation =
   | ASTWrapElementOperation
   | ASTAddStateOperation
@@ -119,7 +157,10 @@ export type ASTOperation =
   | ASTAddRefOperation
   | ASTAddMemoOperation
   | ASTAddCallbackOperation
-  | ASTAddReducerOperation;
+  | ASTAddReducerOperation
+  | ASTAddContextProviderOperation
+  | ASTAddZustandStoreOperation
+  | ASTExtractComponentOperation;
 
 /**
  * Result of executing an AST operation
@@ -638,7 +679,186 @@ export async function executeASTOperation(
           };
         }
       }
-      
+
+      case 'AST_ADD_CONTEXT_PROVIDER': {
+        // Generate Context Provider code
+        const contextName = operation.contextName;
+        const providerName = operation.providerName || `${contextName}Provider`;
+        const hookName = operation.hookName || `use${contextName}`;
+        const includeState = operation.includeState !== false;
+
+        // Build context file content
+        let contextCode = `import React, { createContext, useContext, useState, ReactNode } from 'react';\n\n`;
+
+        // Add TypeScript type if specified
+        if (operation.valueType) {
+          contextCode += `type ${contextName}Value = ${operation.valueType};\n\n`;
+        }
+
+        // Create context
+        contextCode += `const ${contextName} = createContext<${operation.valueType || 'any'}>(${operation.initialValue});\n\n`;
+
+        // Create provider component
+        contextCode += `export function ${providerName}({ children }: { children: ReactNode }) {\n`;
+
+        // Add state variables if specified
+        if (includeState && operation.stateVariables) {
+          for (const stateVar of operation.stateVariables) {
+            contextCode += `  const [${stateVar.name}, set${stateVar.name.charAt(0).toUpperCase() + stateVar.name.slice(1)}] = useState${stateVar.type ? `<${stateVar.type}>` : ''}(${stateVar.initialValue});\n`;
+          }
+          contextCode += `\n`;
+        }
+
+        // Build context value
+        const  valueParts: string[] = [];
+        if (operation.stateVariables) {
+          for (const stateVar of operation.stateVariables) {
+            valueParts.push(`${stateVar.name}`);
+            valueParts.push(`set${stateVar.name.charAt(0).toUpperCase() + stateVar.name.slice(1)}`);
+          }
+        }
+
+        const valueStr = valueParts.length > 0
+          ? `{ ${valueParts.join(', ')} }`
+          : operation.initialValue;
+
+        contextCode += `  const value = ${valueStr};\n\n`;
+        contextCode += `  return (\n`;
+        contextCode += `    <${contextName}.Provider value={value}>\n`;
+        contextCode += `      {children}\n`;
+        contextCode += `    </${contextName}.Provider>\n`;
+        contextCode += `  );\n`;
+        contextCode += `}\n\n`;
+
+        // Create hook
+        contextCode += `export function ${hookName}() {\n`;
+        contextCode += `  const context = useContext(${contextName});\n`;
+        contextCode += `  if (context === undefined) {\n`;
+        contextCode += `    throw new Error('${hookName} must be used within a ${providerName}');\n`;
+        contextCode += `  }\n`;
+        contextCode += `  return context;\n`;
+        contextCode += `}\n`;
+
+        return {
+          success: true,
+          code: contextCode,
+          operation: `Created Context Provider: ${contextName}`
+        };
+      }
+
+      case 'AST_ADD_ZUSTAND_STORE': {
+        // Generate Zustand store code
+        const storeName = operation.storeName;
+        const persist = operation.persist || false;
+
+        let storeCode = `import { create } from 'zustand';\n`;
+
+        if (persist) {
+          storeCode += `import { persist } from 'zustand/middleware';\n`;
+        }
+
+        storeCode += `\n`;
+
+        // Build state interface
+        const stateKeys = Object.keys(operation.initialState);
+        const actionNames = (operation.actions || []).map(a => a.name);
+
+        storeCode += `interface StoreState {\n`;
+        // Add state properties
+        for (const [key, value] of Object.entries(operation.initialState)) {
+          const type = typeof value === 'string' ? 'string'
+                     : typeof value === 'number' ? 'number'
+                     : typeof value === 'boolean' ? 'boolean'
+                     : Array.isArray(value) ? 'any[]'
+                     : 'any';
+          storeCode += `  ${key}: ${type};\n`;
+        }
+        // Add action methods
+        if (operation.actions) {
+          for (const action of operation.actions) {
+            const params = action.params || [];
+            const paramStr = params.map(p => `${p.name}: ${p.type || 'any'}`).join(', ');
+            storeCode += `  ${action.name}: (${paramStr}) => void;\n`;
+          }
+        }
+        storeCode += `}\n\n`;
+
+        // Create store
+        if (persist) {
+          storeCode += `export const ${storeName} = create<StoreState>()(persist(\n`;
+          storeCode += `  (set) => ({\n`;
+        } else {
+          storeCode += `export const ${storeName} = create<StoreState>((set) => ({\n`;
+        }
+
+        // Add initial state
+        for (const [key, value] of Object.entries(operation.initialState)) {
+          const valueStr = JSON.stringify(value);
+          storeCode += `  ${key}: ${valueStr},\n`;
+        }
+
+        storeCode += `\n`;
+
+        // Add actions
+        if (operation.actions) {
+          for (const action of operation.actions) {
+            const params = action.params || [];
+            const paramStr = params.map(p => p.name).join(', ');
+            storeCode += `  ${action.name}: (${params.map(p => `${p.name}: ${p.type || 'any'}`).join(', ')}) => set((state) => ${action.body}),\n`;
+          }
+        }
+
+        if (persist) {
+          storeCode += `}),\n`;
+          storeCode += `  {\n`;
+          storeCode += `    name: '${operation.persistKey || storeName + '-storage'}',\n`;
+          storeCode += `  }\n`;
+          storeCode += `));\n`;
+        } else {
+          storeCode += `}));\n`;
+        }
+
+        return {
+          success: true,
+          code: storeCode,
+          operation: `Created Zustand store: ${storeName}`
+        };
+      }
+
+      case 'AST_EXTRACT_COMPONENT': {
+        // Extract component from JSX
+        const componentName = operation.componentName;
+        const extractProps = operation.extractProps !== false;
+
+        // For now, generate a basic extracted component template
+        // In a real implementation, this would parse the targetJSX and extract variables
+        let componentCode = `import React from 'react';\n\n`;
+
+        // Add prop types if specified
+        if (operation.propTypes && Object.keys(operation.propTypes).length > 0) {
+          componentCode += `interface ${componentName}Props {\n`;
+          for (const [propName, propType] of Object.entries(operation.propTypes)) {
+            componentCode += `  ${propName}: ${propType};\n`;
+          }
+          componentCode += `}\n\n`;
+
+          componentCode += `export function ${componentName}(props: ${componentName}Props) {\n`;
+        } else {
+          componentCode += `export function ${componentName}() {\n`;
+        }
+
+        componentCode += `  return (\n`;
+        componentCode += `    ${operation.targetJSX}\n`;
+        componentCode += `  );\n`;
+        componentCode += `}\n`;
+
+        return {
+          success: true,
+          code: componentCode,
+          operation: `Extracted component: ${componentName}`
+        };
+      }
+
       default:
         return {
           success: false,

@@ -11,10 +11,11 @@ const anthropic = new Anthropic({
 
 // TypeScript interfaces for diff format
 interface DiffChange {
-  type: 'ADD_IMPORT' | 'INSERT_AFTER' | 'INSERT_BEFORE' | 'REPLACE' | 'DELETE' | 'APPEND' 
+  type: 'ADD_IMPORT' | 'INSERT_AFTER' | 'INSERT_BEFORE' | 'REPLACE' | 'DELETE' | 'APPEND'
       | 'AST_WRAP_ELEMENT' | 'AST_ADD_STATE' | 'AST_ADD_IMPORT' | 'AST_MODIFY_CLASSNAME'
       | 'AST_INSERT_JSX' | 'AST_ADD_USEEFFECT' | 'AST_MODIFY_PROP' | 'AST_ADD_AUTHENTICATION'
-      | 'AST_ADD_REF' | 'AST_ADD_MEMO' | 'AST_ADD_CALLBACK' | 'AST_ADD_REDUCER';
+      | 'AST_ADD_REF' | 'AST_ADD_MEMO' | 'AST_ADD_CALLBACK' | 'AST_ADD_REDUCER'
+      | 'AST_ADD_CONTEXT_PROVIDER' | 'AST_ADD_ZUSTAND_STORE' | 'AST_EXTRACT_COMPONENT';
   line?: number;
   searchFor?: string;
   content?: string;
@@ -72,6 +73,29 @@ interface DiffChange {
     type: string;
     handler: string;
   }>;
+  // AST_ADD_CONTEXT_PROVIDER fields
+  contextName?: string;
+  providerName?: string;
+  hookName?: string;
+  valueType?: string;
+  includeState?: boolean;
+  stateVariables?: Array<{
+    name: string;
+    initialValue: string;
+    type?: string;
+  }>;
+  // AST_ADD_ZUSTAND_STORE fields
+  storeName?: string;
+  storeFile?: string;
+  initialState?: Record<string, any>;
+  persist?: boolean;
+  persistKey?: string;
+  // AST_EXTRACT_COMPONENT fields
+  targetJSX?: string;
+  componentName?: string;
+  componentFile?: string;
+  extractProps?: boolean;
+  propTypes?: Record<string, string>;
 }
 
 interface FileDiff {
