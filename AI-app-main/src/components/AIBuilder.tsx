@@ -4,7 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import CodePreview from './CodePreview';
 import FullAppPreview from './FullAppPreview';
 import DiffPreview from './DiffPreview';
+import ThemeSelector from './ThemeSelector';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
+import { ThemeManager } from '../utils/themeSystem';
 
 // Base44-inspired layout with conversation-first design + your dark colors
 
@@ -68,7 +70,11 @@ export default function AIBuilder() {
   const [generationProgress, setGenerationProgress] = useState('');
   const [currentComponent, setCurrentComponent] = useState<GeneratedComponent | null>(null);
   const [isClient, setIsClient] = useState(false);
-  
+
+  // Theme and Layout
+  const [themeManager, setThemeManager] = useState<ThemeManager | null>(null);
+  const [layoutMode, setLayoutMode] = useState<'classic' | 'preview-first' | 'code-first' | 'stacked'>('classic');
+
   // Plan/Act Mode Toggle
   const [currentMode, setCurrentMode] = useState<'PLAN' | 'ACT'>('PLAN');
   const [lastUserRequest, setLastUserRequest] = useState<string>('');
@@ -177,11 +183,23 @@ export default function AIBuilder() {
   // Initialize client-side only
   useEffect(() => {
     setIsClient(true);
+
+    // Initialize theme manager
+    const manager = ThemeManager.loadFromLocalStorage();
+    manager.applyTheme();
+    setThemeManager(manager);
+
+    // Load layout preference
+    const savedLayout = localStorage.getItem('layout-mode');
+    if (savedLayout && ['classic', 'preview-first', 'code-first', 'stacked'].includes(savedLayout)) {
+      setLayoutMode(savedLayout as 'classic' | 'preview-first' | 'code-first' | 'stacked');
+    }
+
     // Set welcome message only on client
     setChatMessages([{
       id: 'welcome',
       role: 'system',
-      content: "👋 Hi! I'm your AI App Builder.\n\n🎯 **How It Works:**\n\n**💭 PLAN Mode** (Current):\n• Discuss what you want to build\n• I'll help design the requirements and architecture\n• No code generated - just planning and roadmapping\n• Ask questions, refine ideas, create specifications\n\n**⚡ ACT Mode:**\n• I'll read our plan and build the app\n• Generates working code based on our discussion\n• Can modify existing apps with surgical precision\n\n**🔒 Smart Protection:**\n• Every change saved to version history\n• One-click undo/redo anytime\n• Review changes before applying\n\n💡 **Start by telling me what you want to build, and we'll plan it together!**",
+      content: "👋 Hi! I'm your AI App Builder.\n\n🎯 **How It Works:**\n\n**💭 PLAN Mode** (Current):\n• Discuss what you want to build\n• I'll help design the requirements and architecture\n• No code generated - just planning and roadmapping\n• Ask questions, refine ideas, create specifications\n\n**⚡ ACT Mode:**\n• I'll read our plan and build the app\n• Generates working code based on our discussion\n• Can modify existing apps with surgical precision\n\n**🔒 Smart Protection:**\n• Every change saved to version history\n• One-click undo/redo anytime\n• Review changes before applying\n\n🎨 **New:** Customize your theme and layout in the header!\n\n💡 **Start by telling me what you want to build, and we'll plan it together!**",
       timestamp: new Date().toISOString()
     }]);
   }, []);
@@ -1466,7 +1484,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
   const downloadCode = () => {
     if (!currentComponent) return;
-    
+
     const blob = new Blob([currentComponent.code], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1474,6 +1492,12 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     a.download = `${currentComponent.name.replace(/\s+/g, '-')}.tsx`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Handle layout mode change
+  const handleLayoutChange = (mode: 'classic' | 'preview-first' | 'code-first' | 'stacked') => {
+    setLayoutMode(mode);
+    localStorage.setItem('layout-mode', mode);
   };
 
   const filteredComponents = components.filter(comp =>
@@ -1510,6 +1534,67 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
             {/* Actions */}
             <div className="flex items-center gap-3">
+              {/* Layout Selector */}
+              <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+                <button
+                  onClick={() => handleLayoutChange('classic')}
+                  className={`px-2 py-1 rounded text-xs transition-all ${
+                    layoutMode === 'classic'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Classic (50/50 split)"
+                >
+                  ⚖️
+                </button>
+                <button
+                  onClick={() => handleLayoutChange('preview-first')}
+                  className={`px-2 py-1 rounded text-xs transition-all ${
+                    layoutMode === 'preview-first'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Preview First (70/30 split)"
+                >
+                  🖼️
+                </button>
+                <button
+                  onClick={() => handleLayoutChange('code-first')}
+                  className={`px-2 py-1 rounded text-xs transition-all ${
+                    layoutMode === 'code-first'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Code First (30/70 split)"
+                >
+                  📝
+                </button>
+                <button
+                  onClick={() => handleLayoutChange('stacked')}
+                  className={`px-2 py-1 rounded text-xs transition-all ${
+                    layoutMode === 'stacked'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Stacked (vertical)"
+                >
+                  📱
+                </button>
+              </div>
+
+              {/* Theme Selector */}
+              {themeManager && (
+                <ThemeSelector
+                  themeManager={themeManager}
+                  onThemeChange={(theme) => {
+                    console.log('Theme changed to:', theme.name);
+                  }}
+                  onCustomColorsChange={(colors) => {
+                    console.log('Custom colors updated:', colors);
+                  }}
+                />
+              )}
+
               {currentComponent && currentComponent.versions && currentComponent.versions.length > 0 && (
                 <button
                   onClick={() => setShowVersionHistory(!showVersionHistory)}
@@ -1541,9 +1626,25 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className={`grid gap-6 ${
+          layoutMode === 'stacked'
+            ? 'grid-cols-1'
+            : layoutMode === 'preview-first'
+            ? 'grid-cols-1 lg:grid-cols-12'
+            : layoutMode === 'code-first'
+            ? 'grid-cols-1 lg:grid-cols-12'
+            : 'grid-cols-1 lg:grid-cols-12'
+        }`}>
           {/* Chat/Conversation Panel - Left Side */}
-          <div className="lg:col-span-5">
+          <div className={
+            layoutMode === 'stacked'
+              ? 'col-span-1'
+              : layoutMode === 'preview-first'
+              ? 'lg:col-span-3'
+              : layoutMode === 'code-first'
+              ? 'lg:col-span-8'
+              : 'lg:col-span-5'
+          }>
             <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
               {/* Chat Header */}
               <div className="px-6 py-4 border-b border-white/10 bg-black/20">
@@ -1703,7 +1804,15 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
           </div>
 
           {/* Preview/Code Panel - Right Side */}
-          <div className="lg:col-span-7">
+          <div className={
+            layoutMode === 'stacked'
+              ? 'col-span-1'
+              : layoutMode === 'preview-first'
+              ? 'lg:col-span-9'
+              : layoutMode === 'code-first'
+              ? 'lg:col-span-4'
+              : 'lg:col-span-7'
+          }>
             <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
               {/* Tabs */}
               <div className="flex items-center gap-2 px-6 py-4 border-b border-white/10 bg-black/20">
