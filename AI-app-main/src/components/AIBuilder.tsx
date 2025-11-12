@@ -8,9 +8,22 @@ import DiffPreview from './DiffPreview';
 import ThemeSelector from './ThemeSelector';
 import TemplateSelector from './TemplateSelector';
 import PhaseProgress from './PhaseProgress';
+import AppConceptWizard from './AppConceptWizard';
+import GuidedBuildView from './GuidedBuildView';
+import StreamingProgressDisplay from './StreamingProgressDisplay';
+import CodeQualityReport from './CodeQualityReport';
+import PerformanceReport from './PerformanceReport';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
+import type { QualityReport, QualityIssue } from '../utils/codeQuality';
+import { applyAllAutoFixes, getGradeColor, detectModifiedFiles } from '../utils/codeQuality';
+import type { PerformanceReport as PerformanceReportType, PerformanceIssue } from '../utils/performanceOptimization';
+import { applyAllPerformanceFixes, getPerformanceGradeColor } from '../utils/performanceOptimization';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
+import { generateImplementationPlan } from '../utils/planGenerator';
+import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
+import { compressConversationHistory, compressToTokenLimit, estimateTokenCount } from '../utils/contextCompression';
+import { ConversationMemory } from '../utils/semanticMemory';
 
 // Base44-inspired layout with conversation-first design + your dark colors
 
@@ -96,7 +109,33 @@ export default function AIBuilder() {
   
   // Version history
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  
+
+  // App Concept & Implementation Plan
+  const [showConceptWizard, setShowConceptWizard] = useState(false);
+  const [implementationPlan, setImplementationPlan] = useState<ImplementationPlan | null>(null);
+  const [guidedBuildMode, setGuidedBuildMode] = useState(false);
+  const autoSendMessageRef = useRef(false);
+
+  // Context Management - Semantic Memory & Compression
+  const conversationMemory = useRef<ConversationMemory | null>(null);
+
+  // Streaming generation state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingProgress, setStreamingProgress] = useState<{
+    phase: 'architecture' | 'files' | 'complete' | 'error';
+    message: string;
+    percentComplete: number;
+    currentFile?: string;
+    fileIndex?: number;
+    totalFiles?: number;
+    files: Array<{ path: string; status: 'pending' | 'generating' | 'complete'; content?: string }>;
+  }>({
+    phase: 'architecture',
+    message: '',
+    percentComplete: 0,
+    files: []
+  });
+
   // Tab controls
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code'>('chat');
   
@@ -149,6 +188,20 @@ export default function AIBuilder() {
   const [selectedTemplate, setSelectedTemplate] = useState<ArchitectureTemplate | null>(null);
   const [pendingTemplateRequest, setPendingTemplateRequest] = useState<string>('');
 
+  // Code Quality Reviewer
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
+  const [showQualityReport, setShowQualityReport] = useState(false);
+  const [isRunningReview, setIsRunningReview] = useState(false);
+  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
+  const [autoReviewEnabled, setAutoReviewEnabled] = useState(false);
+  const [lastReviewedCode, setLastReviewedCode] = useState<string | null>(null);
+
+  // Performance Optimizer
+  const [performanceReport, setPerformanceReport] = useState<PerformanceReportType | null>(null);
+  const [showPerformanceReport, setShowPerformanceReport] = useState(false);
+  const [isRunningPerformanceAnalysis, setIsRunningPerformanceAnalysis] = useState(false);
+  const [isApplyingPerformanceOptimizations, setIsApplyingPerformanceOptimizations] = useState(false);
+
   // Ref for auto-scrolling chat
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +211,21 @@ export default function AIBuilder() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
+
+  // Auto-review on modifications when enabled
+  useEffect(() => {
+    if (autoReviewEnabled && currentComponent && lastReviewedCode) {
+      // Check if code has changed
+      if (currentComponent.code !== lastReviewedCode) {
+        // Debounce: wait 2 seconds after modification before reviewing
+        const timer = setTimeout(() => {
+          handleRunCodeReview(false); // Use incremental mode
+        }, 2000);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentComponent?.code, autoReviewEnabled, lastReviewedCode]);
 
   // Detect mode transitions and show helpful messages
   useEffect(() => {
@@ -197,6 +265,9 @@ export default function AIBuilder() {
     const manager = ThemeManager.loadFromLocalStorage();
     manager.applyTheme();
     setThemeManager(manager);
+
+    // Initialize conversation memory
+    conversationMemory.current = ConversationMemory.create();
 
     // Load layout preference
     const savedLayout = localStorage.getItem('layout-mode');
@@ -291,6 +362,53 @@ export default function AIBuilder() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undoStack, redoStack, currentComponent]);
 
+  // Auto-send message for phase start (handles race condition)
+  useEffect(() => {
+    if (autoSendMessageRef.current && userInput.trim()) {
+      autoSendMessageRef.current = false;
+      // Use a small delay to ensure all state updates have completed
+      const timer = setTimeout(() => {
+        sendMessage();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [userInput]);
+
+  // Save implementation plan to localStorage whenever it changes
+  useEffect(() => {
+    if (implementationPlan) {
+      localStorage.setItem('implementation_plan', JSON.stringify(implementationPlan));
+      localStorage.setItem('guided_build_mode', JSON.stringify(guidedBuildMode));
+    } else {
+      localStorage.removeItem('implementation_plan');
+      localStorage.removeItem('guided_build_mode');
+    }
+  }, [implementationPlan, guidedBuildMode]);
+
+  // Load implementation plan from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPlan = localStorage.getItem('implementation_plan');
+      const savedMode = localStorage.getItem('guided_build_mode');
+
+      if (savedPlan) {
+        try {
+          const plan = JSON.parse(savedPlan) as ImplementationPlan;
+          setImplementationPlan(plan);
+
+          if (savedMode) {
+            const mode = JSON.parse(savedMode) as boolean;
+            setGuidedBuildMode(mode);
+          }
+        } catch (error) {
+          console.error('Failed to load implementation plan from localStorage:', error);
+          localStorage.removeItem('implementation_plan');
+          localStorage.removeItem('guided_build_mode');
+        }
+      }
+    }
+  }, []);
+
   // Load components from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -351,6 +469,212 @@ export default function AIBuilder() {
     // Reset the file input so the same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  /**
+   * Prepare conversation context with compression and semantic memory
+   */
+  const prepareConversationContext = (userPrompt: string): ChatMessage[] => {
+    // Compress conversation history to fit token limits
+    const compressed = compressToTokenLimit(chatMessages, 4000);
+
+    // Add relevant context from semantic memory if available
+    if (conversationMemory.current) {
+      const relevantContext = conversationMemory.current.getRelevantContext(userPrompt, 3);
+
+      if (relevantContext.length > 0) {
+        // Add relevant past context as system messages
+        const contextMessages: ChatMessage[] = relevantContext.map(ctx => ({
+          id: `context-${Date.now()}-${Math.random()}`,
+          role: 'system' as const,
+          content: `[Relevant past context]: ${ctx.content.substring(0, 200)}...`,
+          timestamp: ctx.timestamp
+        }));
+
+        // Combine: recent compressed messages + relevant past context
+        return [...compressed.messages.slice(0, -3), ...contextMessages, ...compressed.messages.slice(-3)];
+      }
+    }
+
+    return compressed.messages;
+  };
+
+  /**
+   * Handle streaming generation for large apps with real-time progress
+   */
+  const handleStreamingGeneration = async (userPrompt: string, optimizedContext: ChatMessage[]) => {
+    setIsStreaming(true);
+    setStreamingProgress({
+      phase: 'architecture',
+      message: 'Starting generation...',
+      percentComplete: 0,
+      files: []
+    });
+
+    try {
+      const response = await fetch('/api/ai-builder/streaming-generation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userPrompt,
+          conversationHistory: optimizedContext
+        })
+      });
+
+      if (!response.body) {
+        throw new Error('No response body for streaming');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalResult: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.substring(6);
+            try {
+              const event = JSON.parse(jsonStr);
+
+              if (event.type === 'result') {
+                finalResult = event.data;
+                continue;
+              }
+
+              // Update streaming progress based on event type
+              if (event.type === 'architecture') {
+                setStreamingProgress(prev => ({
+                  ...prev,
+                  phase: 'architecture',
+                  message: event.message,
+                  percentComplete: event.percentComplete || 0,
+                  totalFiles: event.totalFiles
+                }));
+              } else if (event.type === 'file') {
+                setStreamingProgress(prev => {
+                  // Update files list
+                  const updatedFiles = [...prev.files];
+                  const fileIndex = updatedFiles.findIndex(f => f.path === event.fileName);
+
+                  if (fileIndex >= 0) {
+                    // Update existing file
+                    updatedFiles[fileIndex] = {
+                      path: event.fileName,
+                      status: event.fileContent ? 'complete' : 'generating',
+                      content: event.fileContent
+                    };
+                  } else {
+                    // Add new file
+                    updatedFiles.push({
+                      path: event.fileName,
+                      status: event.fileContent ? 'complete' : 'generating',
+                      content: event.fileContent
+                    });
+                  }
+
+                  return {
+                    ...prev,
+                    phase: 'files',
+                    message: event.message,
+                    percentComplete: event.percentComplete || 0,
+                    currentFile: event.fileName,
+                    fileIndex: event.fileIndex,
+                    totalFiles: event.totalFiles,
+                    files: updatedFiles
+                  };
+                });
+              } else if (event.type === 'complete') {
+                setStreamingProgress(prev => ({
+                  ...prev,
+                  phase: 'complete',
+                  message: event.message,
+                  percentComplete: 100
+                }));
+              } else if (event.type === 'error') {
+                setStreamingProgress(prev => ({
+                  ...prev,
+                  phase: 'error',
+                  message: event.message
+                }));
+              }
+            } catch (e) {
+              console.error('Error parsing streaming event:', e);
+            }
+          }
+        }
+      }
+
+      // Process final result
+      if (finalResult) {
+        const aiAppMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `🚀 App created\n\n${finalResult.description || `I've created your ${finalResult.name} app with ${finalResult.files?.length || 0} files!`}`,
+          timestamp: new Date().toISOString(),
+          componentCode: JSON.stringify(finalResult),
+          componentPreview: !!finalResult.files
+        };
+
+        // Add to semantic memory
+        if (conversationMemory.current) {
+          conversationMemory.current.addMemory(aiAppMessage);
+        }
+
+        setChatMessages(prev => [...prev, aiAppMessage]);
+
+        // Save the generated component
+        const newComponent: GeneratedComponent = {
+          id: Date.now().toString(),
+          name: finalResult.name,
+          code: JSON.stringify(finalResult, null, 2),
+          description: finalResult.description || 'AI-generated app',
+          timestamp: new Date().toISOString(),
+          isFavorite: false,
+          conversationHistory: [...chatMessages, aiAppMessage],
+          versions: [{
+            id: `v-${Date.now()}`,
+            versionNumber: 1,
+            code: JSON.stringify(finalResult, null, 2),
+            description: 'Initial version',
+            timestamp: new Date().toISOString(),
+            changeType: 'NEW_APP'
+          }]
+        };
+
+        setCurrentComponent(newComponent);
+        setComponents(prev => [newComponent, ...prev].slice(0, 50));
+        setActiveTab('preview');
+      }
+
+      setIsStreaming(false);
+      setIsGenerating(false);
+    } catch (error) {
+      console.error('Streaming generation error:', error);
+      setStreamingProgress(prev => ({
+        ...prev,
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      }));
+      setIsStreaming(false);
+      setIsGenerating(false);
+
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `❌ Error generating app: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
     }
   };
 
@@ -684,6 +1008,11 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
       timestamp: new Date().toISOString()
     };
 
+    // Add to semantic memory for long-term context
+    if (conversationMemory.current) {
+      conversationMemory.current.addMemory(userMessage);
+    }
+
     // Store the last user request for mode transition detection
     setLastUserRequest(userInput);
 
@@ -749,14 +1078,17 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         return unique.slice(-50);
       };
 
+      // Prepare optimized conversation context with compression and semantic memory
+      const optimizedContext = prepareConversationContext(userInput);
+
       // Build request body based on endpoint and mode
       let requestBody: any;
-      
+
       if (currentMode === 'PLAN') {
         // In PLAN mode, always send to chat endpoint with PLAN mode flag
         requestBody = {
           prompt: userInput,
-          conversationHistory: chatMessages.slice(-30),
+          conversationHistory: optimizedContext,
           includeCodeInResponse: isRequestingCode,
           mode: 'PLAN'
         };
@@ -764,7 +1096,7 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         // ACT mode Q&A
         requestBody = {
           prompt: userInput,
-          conversationHistory: chatMessages.slice(-30),
+          conversationHistory: optimizedContext,
           includeCodeInResponse: isRequestingCode,
           mode: 'ACT'
         };
@@ -773,14 +1105,14 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         requestBody = {
           prompt: userInput,
           currentAppState: currentComponent ? JSON.parse(currentComponent.code) : null,
-          conversationHistory: getEnhancedHistory(),
+          conversationHistory: optimizedContext,
           includeCodeInResponse: isRequestingCode
         };
       } else {
         // ACT mode new apps
         requestBody = {
           prompt: userInput,
-          conversationHistory: chatMessages.slice(-50),
+          conversationHistory: optimizedContext,
           isModification: false,
           currentAppName: null,
           includeCodeInResponse: isRequestingCode
@@ -798,7 +1130,23 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         requestBody.image = uploadedImage;
         requestBody.hasImage = true;
       }
-      
+
+      // Detect if streaming should be used (for large/complex new apps)
+      const complexityResult = detectComplexity(userInput);
+      const useStreaming = !isQuestion &&
+                           !useDiffSystem &&
+                           currentMode === 'ACT' &&
+                           !currentComponent &&
+                           (complexityResult.complexity === 'COMPLEX' || complexityResult.complexity === 'VERY_COMPLEX');
+
+      // Use streaming for complex apps
+      if (useStreaming) {
+        clearInterval(progressInterval);
+        setGenerationProgress('');
+        await handleStreamingGeneration(userInput, optimizedContext);
+        return; // Exit early, streaming handles the rest
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -929,6 +1277,11 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             componentCode: JSON.stringify(data),
             componentPreview: !!data.files
           };
+
+          // Add AI response to semantic memory
+          if (conversationMemory.current) {
+            conversationMemory.current.addMemory(aiAppMessage);
+          }
 
           setChatMessages(prev => [...prev, aiAppMessage]);
           
@@ -1464,6 +1817,385 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     }
   };
 
+  /**
+   * Run code quality review on current app
+   * Supports incremental mode to only review modified files
+   */
+  const handleRunCodeReview = async (forceFullReview = false) => {
+    if (!currentComponent) {
+      alert('No app to review. Please generate an app first.');
+      return;
+    }
+
+    setIsRunningReview(true);
+
+    try {
+      // Parse app code to extract files
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      if (files.length === 0) {
+        alert('No files found in the current app.');
+        setIsRunningReview(false);
+        return;
+      }
+
+      // Determine if we should use incremental mode
+      const useIncremental = !forceFullReview && lastReviewedCode && qualityReport;
+      let modifiedFiles: string[] = [];
+
+      if (useIncremental) {
+        // Detect what changed since last review
+        const oldAppData = JSON.parse(lastReviewedCode);
+        const oldFiles = oldAppData.files || [];
+        modifiedFiles = detectModifiedFiles(oldFiles, files);
+
+        // If no files changed, skip review
+        if (modifiedFiles.length === 0) {
+          const noChangeMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `✅ No changes detected since last review. Quality remains: **${qualityReport.grade}** (${qualityReport.overallScore}/100)`,
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, noChangeMessage]);
+          setIsRunningReview(false);
+          return;
+        }
+      }
+
+      // Call code review API
+      const response = await fetch('/api/code-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: files.map((f: any) => ({
+            path: f.path,
+            content: f.content
+          })),
+          appName: appData.name || currentComponent.name,
+          appDescription: appData.description || currentComponent.description,
+          incrementalMode: useIncremental,
+          modifiedFiles: useIncremental ? modifiedFiles : undefined,
+          previousReport: useIncremental ? qualityReport : undefined,
+          allFiles: useIncremental ? files.map((f: any) => ({ path: f.path })) : undefined
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.report) {
+        throw new Error(data.error || 'Failed to generate quality report');
+      }
+
+      setQualityReport(data.report);
+      setShowQualityReport(true);
+      setLastReviewedCode(currentComponent.code);
+
+      // Build message based on incremental vs full review
+      let messageContent = `🔍 **Code Quality Review Complete**\n\n`;
+
+      if (data.report.isIncremental && data.report.delta) {
+        const delta = data.report.delta;
+        messageContent += `**Incremental Review** (${data.report.modifiedFiles?.length || 0} file(s) changed)\n\n`;
+        messageContent += `**Grade:** ${data.report.grade} (${data.report.overallScore}/100)`;
+
+        if (delta.scoreChange !== 0) {
+          messageContent += ` ${delta.scoreChange > 0 ? '📈' : '📉'} ${delta.scoreChange > 0 ? '+' : ''}${delta.scoreChange}`;
+        }
+
+        messageContent += `\n\n`;
+
+        if (delta.gradeChange !== 'unchanged') {
+          messageContent += `**Grade ${delta.gradeChange}** ✨\n\n`;
+        }
+
+        if (delta.issuesFixed > 0) {
+          messageContent += `✅ **Fixed:** ${delta.issuesFixed} issue(s)\n`;
+        }
+        if (delta.issuesAdded > 0) {
+          messageContent += `⚠️ **New Issues:** ${delta.issuesAdded}\n`;
+        }
+      } else {
+        messageContent += `**Full Review**\n\n`;
+        messageContent += `**Grade:** ${data.report.grade} (${data.report.overallScore}/100)\n\n`;
+        messageContent += `${data.report.summary}\n\n`;
+        messageContent += `**Issues Found:** ${data.report.metrics.totalIssues} (${data.report.metrics.autoFixableCount} auto-fixable)`;
+      }
+
+      messageContent += `\n\nClick "View Report" to see detailed analysis and apply fixes.`;
+
+      const reviewMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: messageContent,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, reviewMessage]);
+
+    } catch (error) {
+      console.error('Code review error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to run code review: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsRunningReview(false);
+    }
+  };
+
+  /**
+   * Apply selected auto-fixes from quality report
+   */
+  const handleApplyQualityFixes = async (issuesToFix: QualityIssue[]) => {
+    if (!currentComponent || !qualityReport) return;
+
+    setIsApplyingFixes(true);
+
+    try {
+      // Parse current app code
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      // Apply all fixes
+      const updatedFiles = applyAllAutoFixes(files, issuesToFix);
+
+      // Create new version with fixes applied
+      const updatedAppData = {
+        ...appData,
+        files: updatedFiles
+      };
+
+      const newVersion: AppVersion = {
+        id: `v-${Date.now()}`,
+        versionNumber: (currentComponent.versions?.length || 0) + 1,
+        code: JSON.stringify(updatedAppData, null, 2),
+        description: `Applied ${issuesToFix.length} quality fixes`,
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE' as const
+      };
+
+      const updatedComponent: GeneratedComponent = {
+        ...currentComponent,
+        code: JSON.stringify(updatedAppData, null, 2),
+        versions: [...(currentComponent.versions || []), newVersion]
+      };
+
+      // Save undo state
+      setUndoStack(prev => [...prev, {
+        id: `undo-${Date.now()}`,
+        versionNumber: currentComponent.versions?.length || 0,
+        code: currentComponent.code,
+        description: 'Before quality fixes',
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE'
+      }]);
+      setRedoStack([]);
+
+      // Update component
+      setCurrentComponent(updatedComponent);
+      setComponents(prev =>
+        prev.map(comp => comp.id === currentComponent.id ? updatedComponent : comp)
+      );
+
+      // Add success message
+      const successMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ **Quality Fixes Applied**\n\nSuccessfully applied ${issuesToFix.length} auto-fixes to your app.\n\nYour code quality should now be improved. Feel free to test the app and run another review if needed.`,
+        timestamp: new Date().toISOString(),
+        componentCode: JSON.stringify(updatedAppData),
+        componentPreview: true
+      };
+      setChatMessages(prev => [...prev, successMessage]);
+
+      // Close the quality report
+      setShowQualityReport(false);
+      setQualityReport(null);
+      setActiveTab('preview');
+
+    } catch (error) {
+      console.error('Error applying fixes:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to apply fixes: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsApplyingFixes(false);
+    }
+  };
+
+  /**
+   * Run performance analysis on current app
+   */
+  const handleRunPerformanceAnalysis = async () => {
+    if (!currentComponent) {
+      alert('No app to analyze. Please generate an app first.');
+      return;
+    }
+
+    setIsRunningPerformanceAnalysis(true);
+
+    try {
+      // Parse app code to extract files
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      if (files.length === 0) {
+        alert('No files found in the current app.');
+        setIsRunningPerformanceAnalysis(false);
+        return;
+      }
+
+      // Call performance optimization API
+      const response = await fetch('/api/performance-optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: files.map((f: any) => ({
+            path: f.path,
+            content: f.content
+          })),
+          appName: appData.name || currentComponent.name,
+          appDescription: appData.description || currentComponent.description
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.report) {
+        throw new Error(data.error || 'Failed to generate performance report');
+      }
+
+      setPerformanceReport(data.report);
+      setShowPerformanceReport(true);
+
+      // Build message
+      const report = data.report;
+      let messageContent = `⚡ **Performance Analysis Complete**\n\n`;
+      messageContent += `**Grade:** ${report.grade} (${report.overallScore}/100)\n\n`;
+      messageContent += `${report.summary}\n\n`;
+      messageContent += `**Issues Found:** ${report.metrics.totalIssues} (${report.metrics.autoFixableCount} auto-fixable)\n`;
+      messageContent += `**Potential Speedup:** ${report.metrics.estimatedSpeedupPotential}\n\n`;
+
+      if (report.quickWins && report.quickWins.length > 0) {
+        messageContent += `**Quick Wins:** ${report.quickWins.length} high-impact optimizations available\n`;
+      }
+
+      messageContent += `\nClick "View Performance Report" to see detailed analysis and apply optimizations.`;
+
+      const analysisMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: messageContent,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, analysisMessage]);
+
+    } catch (error) {
+      console.error('Performance analysis error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to run performance analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsRunningPerformanceAnalysis(false);
+    }
+  };
+
+  /**
+   * Apply selected performance optimizations
+   */
+  const handleApplyPerformanceOptimizations = async (issuesToFix: PerformanceIssue[]) => {
+    if (!currentComponent || !performanceReport) return;
+
+    setIsApplyingPerformanceOptimizations(true);
+
+    try {
+      // Parse current app code
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      // Apply all performance fixes
+      const updatedFiles = applyAllPerformanceFixes(files, issuesToFix);
+
+      // Create new version with optimizations applied
+      const updatedAppData = {
+        ...appData,
+        files: updatedFiles
+      };
+
+      const newVersion: AppVersion = {
+        id: `v-${Date.now()}`,
+        versionNumber: (currentComponent.versions?.length || 0) + 1,
+        code: JSON.stringify(updatedAppData, null, 2),
+        description: `Applied ${issuesToFix.length} performance optimizations`,
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE' as const
+      };
+
+      const updatedComponent: GeneratedComponent = {
+        ...currentComponent,
+        code: JSON.stringify(updatedAppData, null, 2),
+        versions: [...(currentComponent.versions || []), newVersion]
+      };
+
+      // Save undo state
+      setUndoStack(prev => [...prev, {
+        id: `undo-${Date.now()}`,
+        versionNumber: currentComponent.versions?.length || 0,
+        code: currentComponent.code,
+        description: 'Before performance optimizations',
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE'
+      }]);
+      setRedoStack([]);
+
+      // Update component
+      setCurrentComponent(updatedComponent);
+      setComponents(prev =>
+        prev.map(comp => comp.id === currentComponent.id ? updatedComponent : comp)
+      );
+
+      // Add success message
+      const successMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ **Performance Optimizations Applied**\n\nSuccessfully applied ${issuesToFix.length} optimizations to your app.\n\nYour app should now be significantly faster. Feel free to test it and run another analysis if needed.`,
+        timestamp: new Date().toISOString(),
+        componentCode: JSON.stringify(updatedAppData),
+        componentPreview: true
+      };
+      setChatMessages(prev => [...prev, successMessage]);
+
+      // Close the performance report
+      setShowPerformanceReport(false);
+      setPerformanceReport(null);
+      setActiveTab('preview');
+
+    } catch (error) {
+      console.error('Error applying performance optimizations:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to apply optimizations: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsApplyingPerformanceOptimizations(false);
+    }
+  };
+
   const handleExportApp = async (comp: GeneratedComponent) => {
     setExportingApp(comp);
     
@@ -1518,6 +2250,58 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     localStorage.setItem('layout-mode', mode);
   };
 
+  // Handle App Concept completion
+  const handleConceptComplete = (concept: AppConcept) => {
+    // Generate implementation plan
+    const plan = generateImplementationPlan(concept);
+    setImplementationPlan(plan);
+    setShowConceptWizard(false);
+    setGuidedBuildMode(true);
+
+    // Add a system message
+    const systemMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'system',
+      content: `✨ Implementation plan generated for "${concept.name}"! You'll be guided through ${plan.phases.length} phases to build your app step-by-step.`,
+      timestamp: new Date().toISOString(),
+    };
+    setChatMessages([systemMessage]);
+  };
+
+  // Handle phase start
+  const handlePhaseStart = async (phase: BuildPhase) => {
+    // Update plan to mark phase as in-progress
+    if (implementationPlan) {
+      const updatedPlan = {
+        ...implementationPlan,
+        phases: implementationPlan.phases.map(p =>
+          p.id === phase.id ? { ...p, status: 'in-progress' as const } : p
+        ),
+      };
+      setImplementationPlan(updatedPlan);
+    }
+
+    // Add phase message to chat
+    const phaseMessage: ChatMessage = {
+      id: `phase-${Date.now()}`,
+      role: 'user',
+      content: phase.prompt,
+      timestamp: new Date().toISOString(),
+    };
+    setChatMessages(prev => [...prev, phaseMessage]);
+
+    // Set the phase prompt as user input and trigger auto-send
+    // Using ref to trigger useEffect for reliable state-based sending
+    autoSendMessageRef.current = true;
+    setUserInput(phase.prompt);
+  };
+
+  // Handle guided build mode exit
+  const handleExitGuidedMode = () => {
+    setGuidedBuildMode(false);
+    // Keep the plan in case they want to resume
+  };
+
   // Handle architecture template selection
   const handleTemplateSelect = (template: ArchitectureTemplate | null) => {
     setSelectedTemplate(template);
@@ -1565,6 +2349,28 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
             {/* Actions */}
             <div className="flex items-center gap-3">
+              {/* App Concept Wizard Button */}
+              <button
+                onClick={() => setShowConceptWizard(true)}
+                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm font-medium transition-all shadow-lg shadow-purple-500/20"
+                title="Plan your app with guided wizard"
+              >
+                <span>🎯</span>
+                <span>Plan App</span>
+              </button>
+
+              {/* Resume Plan Button (if plan exists but not in guided mode) */}
+              {implementationPlan && !guidedBuildMode && (
+                <button
+                  onClick={() => setGuidedBuildMode(true)}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-all"
+                  title="Resume implementation plan"
+                >
+                  <span>▶️</span>
+                  <span>Resume Plan</span>
+                </button>
+              )}
+
               {/* Layout Selector */}
               <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
                 <button
@@ -1638,6 +2444,83 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   </span>
                 </button>
               )}
+
+              {/* Code Quality Review Button */}
+              {currentComponent && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRunCodeReview()}
+                    disabled={isRunningReview}
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-green-500/20"
+                    title="Analyze code quality and get improvement suggestions"
+                  >
+                    <span>🔍</span>
+                    <span className="hidden md:inline">{isRunningReview ? 'Reviewing...' : 'Review Quality'}</span>
+                    {qualityReport && !isRunningReview && (
+                      <span className={`text-xs px-2 py-0.5 rounded ${getGradeColor(qualityReport.grade)}`}>
+                        {qualityReport.grade}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Auto-Review Toggle */}
+                  <button
+                    onClick={() => setAutoReviewEnabled(!autoReviewEnabled)}
+                    className={`px-3 py-2 rounded-lg border transition-all text-xs flex items-center gap-1 ${
+                      autoReviewEnabled
+                        ? 'bg-green-600 border-green-500 text-white'
+                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                    title={autoReviewEnabled ? 'Auto-review enabled (reviews on every change)' : 'Enable auto-review (continuous monitoring)'}
+                  >
+                    <span>{autoReviewEnabled ? '🔄' : '⏸️'}</span>
+                    <span className="hidden lg:inline">Auto</span>
+                  </button>
+                </div>
+              )}
+
+              {/* View Report Button (if report exists) */}
+              {qualityReport && !isRunningReview && (
+                <button
+                  onClick={() => setShowQualityReport(true)}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  title="View detailed quality report"
+                >
+                  <span>📊</span>
+                  <span className="hidden sm:inline">View Report</span>
+                </button>
+              )}
+
+              {/* Performance Optimizer Button */}
+              {currentComponent && (
+                <button
+                  onClick={() => handleRunPerformanceAnalysis()}
+                  disabled={isRunningPerformanceAnalysis}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed border border-orange-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-orange-500/20"
+                  title="Analyze app performance and get optimization suggestions"
+                >
+                  <span>⚡</span>
+                  <span className="hidden md:inline">{isRunningPerformanceAnalysis ? 'Analyzing...' : 'Optimize Performance'}</span>
+                  {performanceReport && !isRunningPerformanceAnalysis && (
+                    <span className={`text-xs px-2 py-0.5 rounded ${getPerformanceGradeColor(performanceReport.grade)}`}>
+                      {performanceReport.grade}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* View Performance Report Button (if report exists) */}
+              {performanceReport && !isRunningPerformanceAnalysis && (
+                <button
+                  onClick={() => setShowPerformanceReport(true)}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  title="View detailed performance report"
+                >
+                  <span>📈</span>
+                  <span className="hidden sm:inline">View Performance</span>
+                </button>
+              )}
+
               <button
                 onClick={() => setShowLibrary(!showLibrary)}
                 className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
@@ -1673,9 +2556,20 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             minSize={20}
             maxSize={80}
           >
-            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-full">
-              {/* Chat Header */}
-              <div className="px-6 py-4 border-b border-white/10 bg-black/20">
+            {/* Guided Build Mode View */}
+            {guidedBuildMode && implementationPlan ? (
+              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden h-full">
+                <GuidedBuildView
+                  plan={implementationPlan}
+                  onPhaseStart={handlePhaseStart}
+                  onUpdatePlan={setImplementationPlan}
+                  onExit={handleExitGuidedMode}
+                />
+              </div>
+            ) : (
+              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-full">
+                {/* Chat Header */}
+                <div className="px-6 py-4 border-b border-white/10 bg-black/20">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                     <span>💬</span>
@@ -1760,7 +2654,22 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   </div>
                 )}
 
-                {isGenerating && (
+                {/* Streaming Progress Display */}
+                {isStreaming && (
+                  <div className="my-4">
+                    <StreamingProgressDisplay
+                      phase={streamingProgress.phase}
+                      message={streamingProgress.message}
+                      percentComplete={streamingProgress.percentComplete}
+                      currentFile={streamingProgress.currentFile}
+                      fileIndex={streamingProgress.fileIndex}
+                      totalFiles={streamingProgress.totalFiles}
+                      files={streamingProgress.files}
+                    />
+                  </div>
+                )}
+
+                {isGenerating && !isStreaming && (
                   <div className="flex justify-start">
                     <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl px-4 py-3 border border-blue-500/30">
                       <div className="flex items-center gap-3">
@@ -1839,6 +2748,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </div>
               </div>
             </div>
+            )}
           </Panel>
 
           {/* Resizable Divider */}
@@ -1985,8 +2895,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 )}
               </div>
             </div>
-          </div>
-        </div>
+          </Panel>
+        </PanelGroup>
       </div>
 
       {/* App Library Sidebar */}
@@ -2096,9 +3006,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               )}
             </div>
           </div>
-          </Panel>
-        </PanelGroup>
-      </div>
+        </div>
       )}
 
       {/* Change Approval Modal */}
@@ -2876,6 +3784,34 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             </div>
           </div>
         </div>
+      )}
+
+      {/* App Concept Wizard Modal */}
+      {showConceptWizard && (
+        <AppConceptWizard
+          onComplete={handleConceptComplete}
+          onCancel={() => setShowConceptWizard(false)}
+        />
+      )}
+
+      {/* Code Quality Report Modal */}
+      {showQualityReport && qualityReport && (
+        <CodeQualityReport
+          report={qualityReport}
+          onApplyFixes={handleApplyQualityFixes}
+          onClose={() => setShowQualityReport(false)}
+          isApplyingFixes={isApplyingFixes}
+        />
+      )}
+
+      {/* Performance Report Modal */}
+      {showPerformanceReport && performanceReport && (
+        <PerformanceReport
+          report={performanceReport}
+          onApplyFixes={handleApplyPerformanceOptimizations}
+          onClose={() => setShowPerformanceReport(false)}
+          isApplyingFixes={isApplyingPerformanceOptimizations}
+        />
       )}
     </div>
   );
