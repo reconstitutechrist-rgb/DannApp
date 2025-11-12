@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 module.exports = {
   reactStrictMode: true,
+  // Empty turbopack config to silence Next.js 16 warning
+  turbopack: {},
   webpack: (config, { isServer }) => {
     // Fix for tree-sitter native bindings
     if (isServer) {
