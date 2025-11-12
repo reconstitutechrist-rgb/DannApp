@@ -41,10 +41,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (isChecking) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4 animate-bounce">🔒</div>
-          <div className="text-white text-xl">Checking authentication...</div>
+          <div className="text-neutral-50 text-xl font-medium">Checking authentication...</div>
         </div>
       </div>
     );

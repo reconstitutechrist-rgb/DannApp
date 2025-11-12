@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 font-sans">
+      <body className="h-full bg-neutral-950 font-sans">
         <AuthGuard>
           <div className="min-h-full">
             {children}
