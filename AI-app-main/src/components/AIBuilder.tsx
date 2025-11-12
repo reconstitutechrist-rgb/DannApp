@@ -12,10 +12,13 @@ import AppConceptWizard from './AppConceptWizard';
 import GuidedBuildView from './GuidedBuildView';
 import StreamingProgressDisplay from './StreamingProgressDisplay';
 import CodeQualityReport from './CodeQualityReport';
+import PerformanceReport from './PerformanceReport';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
 import type { QualityReport, QualityIssue } from '../utils/codeQuality';
 import { applyAllAutoFixes, getGradeColor, detectModifiedFiles } from '../utils/codeQuality';
+import type { PerformanceReport as PerformanceReportType, PerformanceIssue } from '../utils/performanceOptimization';
+import { applyAllPerformanceFixes, getPerformanceGradeColor } from '../utils/performanceOptimization';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
 import { generateImplementationPlan } from '../utils/planGenerator';
 import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
@@ -192,6 +195,12 @@ export default function AIBuilder() {
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
   const [autoReviewEnabled, setAutoReviewEnabled] = useState(false);
   const [lastReviewedCode, setLastReviewedCode] = useState<string | null>(null);
+
+  // Performance Optimizer
+  const [performanceReport, setPerformanceReport] = useState<PerformanceReportType | null>(null);
+  const [showPerformanceReport, setShowPerformanceReport] = useState(false);
+  const [isRunningPerformanceAnalysis, setIsRunningPerformanceAnalysis] = useState(false);
+  const [isApplyingPerformanceOptimizations, setIsApplyingPerformanceOptimizations] = useState(false);
 
   // Ref for auto-scrolling chat
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -2022,6 +2031,171 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     }
   };
 
+  /**
+   * Run performance analysis on current app
+   */
+  const handleRunPerformanceAnalysis = async () => {
+    if (!currentComponent) {
+      alert('No app to analyze. Please generate an app first.');
+      return;
+    }
+
+    setIsRunningPerformanceAnalysis(true);
+
+    try {
+      // Parse app code to extract files
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      if (files.length === 0) {
+        alert('No files found in the current app.');
+        setIsRunningPerformanceAnalysis(false);
+        return;
+      }
+
+      // Call performance optimization API
+      const response = await fetch('/api/performance-optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: files.map((f: any) => ({
+            path: f.path,
+            content: f.content
+          })),
+          appName: appData.name || currentComponent.name,
+          appDescription: appData.description || currentComponent.description
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.report) {
+        throw new Error(data.error || 'Failed to generate performance report');
+      }
+
+      setPerformanceReport(data.report);
+      setShowPerformanceReport(true);
+
+      // Build message
+      const report = data.report;
+      let messageContent = `⚡ **Performance Analysis Complete**\n\n`;
+      messageContent += `**Grade:** ${report.grade} (${report.overallScore}/100)\n\n`;
+      messageContent += `${report.summary}\n\n`;
+      messageContent += `**Issues Found:** ${report.metrics.totalIssues} (${report.metrics.autoFixableCount} auto-fixable)\n`;
+      messageContent += `**Potential Speedup:** ${report.metrics.estimatedSpeedupPotential}\n\n`;
+
+      if (report.quickWins && report.quickWins.length > 0) {
+        messageContent += `**Quick Wins:** ${report.quickWins.length} high-impact optimizations available\n`;
+      }
+
+      messageContent += `\nClick "View Performance Report" to see detailed analysis and apply optimizations.`;
+
+      const analysisMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: messageContent,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, analysisMessage]);
+
+    } catch (error) {
+      console.error('Performance analysis error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to run performance analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsRunningPerformanceAnalysis(false);
+    }
+  };
+
+  /**
+   * Apply selected performance optimizations
+   */
+  const handleApplyPerformanceOptimizations = async (issuesToFix: PerformanceIssue[]) => {
+    if (!currentComponent || !performanceReport) return;
+
+    setIsApplyingPerformanceOptimizations(true);
+
+    try {
+      // Parse current app code
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      // Apply all performance fixes
+      const updatedFiles = applyAllPerformanceFixes(files, issuesToFix);
+
+      // Create new version with optimizations applied
+      const updatedAppData = {
+        ...appData,
+        files: updatedFiles
+      };
+
+      const newVersion: AppVersion = {
+        id: `v-${Date.now()}`,
+        versionNumber: (currentComponent.versions?.length || 0) + 1,
+        code: JSON.stringify(updatedAppData, null, 2),
+        description: `Applied ${issuesToFix.length} performance optimizations`,
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE' as const
+      };
+
+      const updatedComponent: GeneratedComponent = {
+        ...currentComponent,
+        code: JSON.stringify(updatedAppData, null, 2),
+        versions: [...(currentComponent.versions || []), newVersion]
+      };
+
+      // Save undo state
+      setUndoStack(prev => [...prev, {
+        id: `undo-${Date.now()}`,
+        versionNumber: currentComponent.versions?.length || 0,
+        code: currentComponent.code,
+        description: 'Before performance optimizations',
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE'
+      }]);
+      setRedoStack([]);
+
+      // Update component
+      setCurrentComponent(updatedComponent);
+      setComponents(prev =>
+        prev.map(comp => comp.id === currentComponent.id ? updatedComponent : comp)
+      );
+
+      // Add success message
+      const successMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ **Performance Optimizations Applied**\n\nSuccessfully applied ${issuesToFix.length} optimizations to your app.\n\nYour app should now be significantly faster. Feel free to test it and run another analysis if needed.`,
+        timestamp: new Date().toISOString(),
+        componentCode: JSON.stringify(updatedAppData),
+        componentPreview: true
+      };
+      setChatMessages(prev => [...prev, successMessage]);
+
+      // Close the performance report
+      setShowPerformanceReport(false);
+      setPerformanceReport(null);
+      setActiveTab('preview');
+
+    } catch (error) {
+      console.error('Error applying performance optimizations:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to apply optimizations: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsApplyingPerformanceOptimizations(false);
+    }
+  };
+
   const handleExportApp = async (comp: GeneratedComponent) => {
     setExportingApp(comp);
     
@@ -2314,6 +2488,36 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 >
                   <span>📊</span>
                   <span className="hidden sm:inline">View Report</span>
+                </button>
+              )}
+
+              {/* Performance Optimizer Button */}
+              {currentComponent && (
+                <button
+                  onClick={() => handleRunPerformanceAnalysis()}
+                  disabled={isRunningPerformanceAnalysis}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed border border-orange-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-orange-500/20"
+                  title="Analyze app performance and get optimization suggestions"
+                >
+                  <span>⚡</span>
+                  <span className="hidden md:inline">{isRunningPerformanceAnalysis ? 'Analyzing...' : 'Optimize Performance'}</span>
+                  {performanceReport && !isRunningPerformanceAnalysis && (
+                    <span className={`text-xs px-2 py-0.5 rounded ${getPerformanceGradeColor(performanceReport.grade)}`}>
+                      {performanceReport.grade}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* View Performance Report Button (if report exists) */}
+              {performanceReport && !isRunningPerformanceAnalysis && (
+                <button
+                  onClick={() => setShowPerformanceReport(true)}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  title="View detailed performance report"
+                >
+                  <span>📈</span>
+                  <span className="hidden sm:inline">View Performance</span>
                 </button>
               )}
 
@@ -3597,6 +3801,16 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
           onApplyFixes={handleApplyQualityFixes}
           onClose={() => setShowQualityReport(false)}
           isApplyingFixes={isApplyingFixes}
+        />
+      )}
+
+      {/* Performance Report Modal */}
+      {showPerformanceReport && performanceReport && (
+        <PerformanceReport
+          report={performanceReport}
+          onApplyFixes={handleApplyPerformanceOptimizations}
+          onClose={() => setShowPerformanceReport(false)}
+          isApplyingFixes={isApplyingPerformanceOptimizations}
         />
       )}
     </div>
