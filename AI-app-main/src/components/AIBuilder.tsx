@@ -1985,8 +1985,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 )}
               </div>
             </div>
-          </div>
-        </div>
+          </Panel>
+        </PanelGroup>
       </div>
 
       {/* App Library Sidebar */}
@@ -2096,9 +2096,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               )}
             </div>
           </div>
-          </Panel>
-        </PanelGroup>
-      </div>
+        </div>
       )}
 
       {/* Change Approval Modal */}

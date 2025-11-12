@@ -87,7 +87,7 @@ interface DiffChange {
   // AST_ADD_ZUSTAND_STORE fields
   storeName?: string;
   storeFile?: string;
-  initialState?: Record<string, any>;
+  zustandInitialState?: Record<string, any>;
   persist?: boolean;
   persistKey?: string;
   // AST_EXTRACT_COMPONENT fields

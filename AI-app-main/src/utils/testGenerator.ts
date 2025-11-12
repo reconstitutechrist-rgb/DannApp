@@ -483,7 +483,10 @@ export function getTestDependencies(framework: TestFramework): {
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
 } {
-  const base = {
+  const base: {
+    dependencies: Record<string, string>;
+    devDependencies: Record<string, string>;
+  } = {
     dependencies: {},
     devDependencies: {
       '@testing-library/react': '^14.0.0',
