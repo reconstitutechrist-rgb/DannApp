@@ -15,7 +15,7 @@ import CodeQualityReport from './CodeQualityReport';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
 import type { QualityReport, QualityIssue } from '../utils/codeQuality';
-import { applyAllAutoFixes, getGradeColor } from '../utils/codeQuality';
+import { applyAllAutoFixes, getGradeColor, detectModifiedFiles } from '../utils/codeQuality';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
 import { generateImplementationPlan } from '../utils/planGenerator';
 import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
@@ -190,6 +190,8 @@ export default function AIBuilder() {
   const [showQualityReport, setShowQualityReport] = useState(false);
   const [isRunningReview, setIsRunningReview] = useState(false);
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
+  const [autoReviewEnabled, setAutoReviewEnabled] = useState(false);
+  const [lastReviewedCode, setLastReviewedCode] = useState<string | null>(null);
 
   // Ref for auto-scrolling chat
   const chatContainerRef = useRef<HTMLDivElement>(null);

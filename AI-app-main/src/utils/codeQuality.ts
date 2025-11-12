@@ -35,6 +35,43 @@ export interface QualityReport {
   };
   strengths: string[];
   recommendations: string[];
+  delta?: {
+    scoreChange: number;
+    gradeChange: string;
+    issuesAdded: number;
+    issuesFixed: number;
+    newIssues: QualityIssue[];
+    fixedIssues: string[];
+  };
+  isIncremental?: boolean;
+  modifiedFiles?: string[];
+}
+
+/**
+ * Detect which files have been modified between two versions
+ */
+export function detectModifiedFiles(
+  oldFiles: Array<{ path: string; content: string }>,
+  newFiles: Array<{ path: string; content: string }>
+): string[] {
+  const modifiedPaths: string[] = [];
+
+  // Create maps for quick lookup
+  const oldFileMap = new Map(oldFiles.map(f => [f.path, f.content]));
+  const newFileMap = new Map(newFiles.map(f => [f.path, f.content]));
+
+  // Check for modified or new files
+  for (const [path, newContent] of newFileMap) {
+    const oldContent = oldFileMap.get(path);
+    if (!oldContent || oldContent !== newContent) {
+      modifiedPaths.push(path);
+    }
+  }
+
+  // Note: We don't include deleted files in the review
+  // as there's nothing to review
+
+  return modifiedPaths;
 }
 
 /**
