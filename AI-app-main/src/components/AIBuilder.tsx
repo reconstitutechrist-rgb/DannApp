@@ -11,8 +11,11 @@ import PhaseProgress from './PhaseProgress';
 import AppConceptWizard from './AppConceptWizard';
 import GuidedBuildView from './GuidedBuildView';
 import StreamingProgressDisplay from './StreamingProgressDisplay';
+import CodeQualityReport from './CodeQualityReport';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
+import type { QualityReport, QualityIssue } from '../utils/codeQuality';
+import { applyAllAutoFixes, getGradeColor } from '../utils/codeQuality';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
 import { generateImplementationPlan } from '../utils/planGenerator';
 import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
@@ -181,6 +184,12 @@ export default function AIBuilder() {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ArchitectureTemplate | null>(null);
   const [pendingTemplateRequest, setPendingTemplateRequest] = useState<string>('');
+
+  // Code Quality Reviewer
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
+  const [showQualityReport, setShowQualityReport] = useState(false);
+  const [isRunningReview, setIsRunningReview] = useState(false);
+  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
 
   // Ref for auto-scrolling chat
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -1782,6 +1791,158 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     }
   };
 
+  /**
+   * Run code quality review on current app
+   */
+  const handleRunCodeReview = async () => {
+    if (!currentComponent) {
+      alert('No app to review. Please generate an app first.');
+      return;
+    }
+
+    setIsRunningReview(true);
+
+    try {
+      // Parse app code to extract files
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      if (files.length === 0) {
+        alert('No files found in the current app.');
+        setIsRunningReview(false);
+        return;
+      }
+
+      // Call code review API
+      const response = await fetch('/api/code-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: files.map((f: any) => ({
+            path: f.path,
+            content: f.content
+          })),
+          appName: appData.name || currentComponent.name,
+          appDescription: appData.description || currentComponent.description
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.report) {
+        throw new Error(data.error || 'Failed to generate quality report');
+      }
+
+      setQualityReport(data.report);
+      setShowQualityReport(true);
+
+      // Add message to chat
+      const reviewMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `🔍 **Code Quality Review Complete**\n\n**Grade:** ${data.report.grade} (${data.report.overallScore}/100)\n\n${data.report.summary}\n\n**Issues Found:** ${data.report.metrics.totalIssues} (${data.report.metrics.autoFixableCount} auto-fixable)\n\nClick "View Report" to see detailed analysis and apply fixes.`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, reviewMessage]);
+
+    } catch (error) {
+      console.error('Code review error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to run code review: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsRunningReview(false);
+    }
+  };
+
+  /**
+   * Apply selected auto-fixes from quality report
+   */
+  const handleApplyQualityFixes = async (issuesToFix: QualityIssue[]) => {
+    if (!currentComponent || !qualityReport) return;
+
+    setIsApplyingFixes(true);
+
+    try {
+      // Parse current app code
+      const appData = JSON.parse(currentComponent.code);
+      const files = appData.files || [];
+
+      // Apply all fixes
+      const updatedFiles = applyAllAutoFixes(files, issuesToFix);
+
+      // Create new version with fixes applied
+      const updatedAppData = {
+        ...appData,
+        files: updatedFiles
+      };
+
+      const newVersion: AppVersion = {
+        id: `v-${Date.now()}`,
+        versionNumber: (currentComponent.versions?.length || 0) + 1,
+        code: JSON.stringify(updatedAppData, null, 2),
+        description: `Applied ${issuesToFix.length} quality fixes`,
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE' as const
+      };
+
+      const updatedComponent: GeneratedComponent = {
+        ...currentComponent,
+        code: JSON.stringify(updatedAppData, null, 2),
+        versions: [...(currentComponent.versions || []), newVersion]
+      };
+
+      // Save undo state
+      setUndoStack(prev => [...prev, {
+        id: `undo-${Date.now()}`,
+        versionNumber: currentComponent.versions?.length || 0,
+        code: currentComponent.code,
+        description: 'Before quality fixes',
+        timestamp: new Date().toISOString(),
+        changeType: 'MINOR_CHANGE'
+      }]);
+      setRedoStack([]);
+
+      // Update component
+      setCurrentComponent(updatedComponent);
+      setComponents(prev =>
+        prev.map(comp => comp.id === currentComponent.id ? updatedComponent : comp)
+      );
+
+      // Add success message
+      const successMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ **Quality Fixes Applied**\n\nSuccessfully applied ${issuesToFix.length} auto-fixes to your app.\n\nYour code quality should now be improved. Feel free to test the app and run another review if needed.`,
+        timestamp: new Date().toISOString(),
+        componentCode: JSON.stringify(updatedAppData),
+        componentPreview: true
+      };
+      setChatMessages(prev => [...prev, successMessage]);
+
+      // Close the quality report
+      setShowQualityReport(false);
+      setQualityReport(null);
+      setActiveTab('preview');
+
+    } catch (error) {
+      console.error('Error applying fixes:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Failed to apply fixes: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsApplyingFixes(false);
+    }
+  };
+
   const handleExportApp = async (comp: GeneratedComponent) => {
     setExportingApp(comp);
     
@@ -2030,6 +2191,37 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   </span>
                 </button>
               )}
+
+              {/* Code Quality Review Button */}
+              {currentComponent && (
+                <button
+                  onClick={handleRunCodeReview}
+                  disabled={isRunningReview}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-green-500/20"
+                  title="Analyze code quality and get improvement suggestions"
+                >
+                  <span>🔍</span>
+                  <span className="hidden md:inline">{isRunningReview ? 'Reviewing...' : 'Review Quality'}</span>
+                  {qualityReport && !isRunningReview && (
+                    <span className={`text-xs px-2 py-0.5 rounded ${getGradeColor(qualityReport.grade)}`}>
+                      {qualityReport.grade}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* View Report Button (if report exists) */}
+              {qualityReport && !isRunningReview && (
+                <button
+                  onClick={() => setShowQualityReport(true)}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  title="View detailed quality report"
+                >
+                  <span>📊</span>
+                  <span className="hidden sm:inline">View Report</span>
+                </button>
+              )}
+
               <button
                 onClick={() => setShowLibrary(!showLibrary)}
                 className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
@@ -3300,6 +3492,16 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
         <AppConceptWizard
           onComplete={handleConceptComplete}
           onCancel={() => setShowConceptWizard(false)}
+        />
+      )}
+
+      {/* Code Quality Report Modal */}
+      {showQualityReport && qualityReport && (
+        <CodeQualityReport
+          report={qualityReport}
+          onApplyFixes={handleApplyQualityFixes}
+          onClose={() => setShowQualityReport(false)}
+          isApplyingFixes={isApplyingFixes}
         />
       )}
     </div>
