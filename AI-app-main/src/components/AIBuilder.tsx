@@ -203,6 +203,21 @@ export default function AIBuilder() {
     }
   }, [chatMessages]);
 
+  // Auto-review on modifications when enabled
+  useEffect(() => {
+    if (autoReviewEnabled && currentComponent && lastReviewedCode) {
+      // Check if code has changed
+      if (currentComponent.code !== lastReviewedCode) {
+        // Debounce: wait 2 seconds after modification before reviewing
+        const timer = setTimeout(() => {
+          handleRunCodeReview(false); // Use incremental mode
+        }, 2000);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentComponent?.code, autoReviewEnabled, lastReviewedCode]);
+
   // Detect mode transitions and show helpful messages
   useEffect(() => {
     const previousMode = previousModeRef.current;
@@ -1795,8 +1810,9 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
   /**
    * Run code quality review on current app
+   * Supports incremental mode to only review modified files
    */
-  const handleRunCodeReview = async () => {
+  const handleRunCodeReview = async (forceFullReview = false) => {
     if (!currentComponent) {
       alert('No app to review. Please generate an app first.');
       return;
@@ -1815,6 +1831,30 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
         return;
       }
 
+      // Determine if we should use incremental mode
+      const useIncremental = !forceFullReview && lastReviewedCode && qualityReport;
+      let modifiedFiles: string[] = [];
+
+      if (useIncremental) {
+        // Detect what changed since last review
+        const oldAppData = JSON.parse(lastReviewedCode);
+        const oldFiles = oldAppData.files || [];
+        modifiedFiles = detectModifiedFiles(oldFiles, files);
+
+        // If no files changed, skip review
+        if (modifiedFiles.length === 0) {
+          const noChangeMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `✅ No changes detected since last review. Quality remains: **${qualityReport.grade}** (${qualityReport.overallScore}/100)`,
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, noChangeMessage]);
+          setIsRunningReview(false);
+          return;
+        }
+      }
+
       // Call code review API
       const response = await fetch('/api/code-review', {
         method: 'POST',
@@ -1825,7 +1865,11 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             content: f.content
           })),
           appName: appData.name || currentComponent.name,
-          appDescription: appData.description || currentComponent.description
+          appDescription: appData.description || currentComponent.description,
+          incrementalMode: useIncremental,
+          modifiedFiles: useIncremental ? modifiedFiles : undefined,
+          previousReport: useIncremental ? qualityReport : undefined,
+          allFiles: useIncremental ? files.map((f: any) => ({ path: f.path })) : undefined
         })
       });
 
@@ -1837,12 +1881,45 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
       setQualityReport(data.report);
       setShowQualityReport(true);
+      setLastReviewedCode(currentComponent.code);
 
-      // Add message to chat
+      // Build message based on incremental vs full review
+      let messageContent = `🔍 **Code Quality Review Complete**\n\n`;
+
+      if (data.report.isIncremental && data.report.delta) {
+        const delta = data.report.delta;
+        messageContent += `**Incremental Review** (${data.report.modifiedFiles?.length || 0} file(s) changed)\n\n`;
+        messageContent += `**Grade:** ${data.report.grade} (${data.report.overallScore}/100)`;
+
+        if (delta.scoreChange !== 0) {
+          messageContent += ` ${delta.scoreChange > 0 ? '📈' : '📉'} ${delta.scoreChange > 0 ? '+' : ''}${delta.scoreChange}`;
+        }
+
+        messageContent += `\n\n`;
+
+        if (delta.gradeChange !== 'unchanged') {
+          messageContent += `**Grade ${delta.gradeChange}** ✨\n\n`;
+        }
+
+        if (delta.issuesFixed > 0) {
+          messageContent += `✅ **Fixed:** ${delta.issuesFixed} issue(s)\n`;
+        }
+        if (delta.issuesAdded > 0) {
+          messageContent += `⚠️ **New Issues:** ${delta.issuesAdded}\n`;
+        }
+      } else {
+        messageContent += `**Full Review**\n\n`;
+        messageContent += `**Grade:** ${data.report.grade} (${data.report.overallScore}/100)\n\n`;
+        messageContent += `${data.report.summary}\n\n`;
+        messageContent += `**Issues Found:** ${data.report.metrics.totalIssues} (${data.report.metrics.autoFixableCount} auto-fixable)`;
+      }
+
+      messageContent += `\n\nClick "View Report" to see detailed analysis and apply fixes.`;
+
       const reviewMessage: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `🔍 **Code Quality Review Complete**\n\n**Grade:** ${data.report.grade} (${data.report.overallScore}/100)\n\n${data.report.summary}\n\n**Issues Found:** ${data.report.metrics.totalIssues} (${data.report.metrics.autoFixableCount} auto-fixable)\n\nClick "View Report" to see detailed analysis and apply fixes.`,
+        content: messageContent,
         timestamp: new Date().toISOString()
       };
       setChatMessages(prev => [...prev, reviewMessage]);
@@ -2196,20 +2273,36 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
               {/* Code Quality Review Button */}
               {currentComponent && (
-                <button
-                  onClick={handleRunCodeReview}
-                  disabled={isRunningReview}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-green-500/20"
-                  title="Analyze code quality and get improvement suggestions"
-                >
-                  <span>🔍</span>
-                  <span className="hidden md:inline">{isRunningReview ? 'Reviewing...' : 'Review Quality'}</span>
-                  {qualityReport && !isRunningReview && (
-                    <span className={`text-xs px-2 py-0.5 rounded ${getGradeColor(qualityReport.grade)}`}>
-                      {qualityReport.grade}
-                    </span>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRunCodeReview()}
+                    disabled={isRunningReview}
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-green-500/20"
+                    title="Analyze code quality and get improvement suggestions"
+                  >
+                    <span>🔍</span>
+                    <span className="hidden md:inline">{isRunningReview ? 'Reviewing...' : 'Review Quality'}</span>
+                    {qualityReport && !isRunningReview && (
+                      <span className={`text-xs px-2 py-0.5 rounded ${getGradeColor(qualityReport.grade)}`}>
+                        {qualityReport.grade}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Auto-Review Toggle */}
+                  <button
+                    onClick={() => setAutoReviewEnabled(!autoReviewEnabled)}
+                    className={`px-3 py-2 rounded-lg border transition-all text-xs flex items-center gap-1 ${
+                      autoReviewEnabled
+                        ? 'bg-green-600 border-green-500 text-white'
+                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                    title={autoReviewEnabled ? 'Auto-review enabled (reviews on every change)' : 'Enable auto-review (continuous monitoring)'}
+                  >
+                    <span>{autoReviewEnabled ? '🔄' : '⏸️'}</span>
+                    <span className="hidden lg:inline">Auto</span>
+                  </button>
+                </div>
               )}
 
               {/* View Report Button (if report exists) */}
