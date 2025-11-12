@@ -15,6 +15,8 @@ import { ThemeManager } from '../utils/themeSystem';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
 import { generateImplementationPlan } from '../utils/planGenerator';
 import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
+import { compressConversationHistory, compressToTokenLimit, estimateTokenCount } from '../utils/contextCompression';
+import { ConversationMemory } from '../utils/semanticMemory';
 
 // Base44-inspired layout with conversation-first design + your dark colors
 
@@ -106,6 +108,9 @@ export default function AIBuilder() {
   const [implementationPlan, setImplementationPlan] = useState<ImplementationPlan | null>(null);
   const [guidedBuildMode, setGuidedBuildMode] = useState(false);
   const autoSendMessageRef = useRef(false);
+
+  // Context Management - Semantic Memory & Compression
+  const conversationMemory = useRef<ConversationMemory | null>(null);
 
   // Tab controls
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code'>('chat');
@@ -207,6 +212,9 @@ export default function AIBuilder() {
     const manager = ThemeManager.loadFromLocalStorage();
     manager.applyTheme();
     setThemeManager(manager);
+
+    // Initialize conversation memory
+    conversationMemory.current = ConversationMemory.create();
 
     // Load layout preference
     const savedLayout = localStorage.getItem('layout-mode');
@@ -409,6 +417,34 @@ export default function AIBuilder() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  /**
+   * Prepare conversation context with compression and semantic memory
+   */
+  const prepareConversationContext = (userPrompt: string): ChatMessage[] => {
+    // Compress conversation history to fit token limits
+    const compressed = compressToTokenLimit(chatMessages, 4000);
+
+    // Add relevant context from semantic memory if available
+    if (conversationMemory.current) {
+      const relevantContext = conversationMemory.current.getRelevantContext(userPrompt, 3);
+
+      if (relevantContext.length > 0) {
+        // Add relevant past context as system messages
+        const contextMessages: ChatMessage[] = relevantContext.map(ctx => ({
+          id: `context-${Date.now()}-${Math.random()}`,
+          role: 'system' as const,
+          content: `[Relevant past context]: ${ctx.content.substring(0, 200)}...`,
+          timestamp: ctx.timestamp
+        }));
+
+        // Combine: recent compressed messages + relevant past context
+        return [...compressed.messages.slice(0, -3), ...contextMessages, ...compressed.messages.slice(-3)];
+      }
+    }
+
+    return compressed.messages;
   };
 
   const sendMessage = async () => {
@@ -741,6 +777,11 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
       timestamp: new Date().toISOString()
     };
 
+    // Add to semantic memory for long-term context
+    if (conversationMemory.current) {
+      conversationMemory.current.addMemory(userMessage);
+    }
+
     // Store the last user request for mode transition detection
     setLastUserRequest(userInput);
 
@@ -806,14 +847,17 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         return unique.slice(-50);
       };
 
+      // Prepare optimized conversation context with compression and semantic memory
+      const optimizedContext = prepareConversationContext(userInput);
+
       // Build request body based on endpoint and mode
       let requestBody: any;
-      
+
       if (currentMode === 'PLAN') {
         // In PLAN mode, always send to chat endpoint with PLAN mode flag
         requestBody = {
           prompt: userInput,
-          conversationHistory: chatMessages.slice(-30),
+          conversationHistory: optimizedContext,
           includeCodeInResponse: isRequestingCode,
           mode: 'PLAN'
         };
@@ -821,7 +865,7 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         // ACT mode Q&A
         requestBody = {
           prompt: userInput,
-          conversationHistory: chatMessages.slice(-30),
+          conversationHistory: optimizedContext,
           includeCodeInResponse: isRequestingCode,
           mode: 'ACT'
         };
@@ -830,14 +874,14 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         requestBody = {
           prompt: userInput,
           currentAppState: currentComponent ? JSON.parse(currentComponent.code) : null,
-          conversationHistory: getEnhancedHistory(),
+          conversationHistory: optimizedContext,
           includeCodeInResponse: isRequestingCode
         };
       } else {
         // ACT mode new apps
         requestBody = {
           prompt: userInput,
-          conversationHistory: chatMessages.slice(-50),
+          conversationHistory: optimizedContext,
           isModification: false,
           currentAppName: null,
           includeCodeInResponse: isRequestingCode
@@ -986,6 +1030,11 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             componentCode: JSON.stringify(data),
             componentPreview: !!data.files
           };
+
+          // Add AI response to semantic memory
+          if (conversationMemory.current) {
+            conversationMemory.current.addMemory(aiAppMessage);
+          }
 
           setChatMessages(prev => [...prev, aiAppMessage]);
           
