@@ -35,9 +35,19 @@ export function generateImplementationPlan(concept: AppConcept): ImplementationP
   // Phase 5-N: Feature Implementation (one phase per high-priority feature)
   const sortedFeatures = sortFeaturesByDependencies(concept.coreFeatures);
 
+  // Build a mapping of feature IDs to phase numbers for dependency resolution
+  const featureToPhaseNumber = new Map<string, number>();
+  let tempPhaseNumber = phaseNumber;
   for (const feature of sortedFeatures) {
     if (feature.priority === 'high') {
-      phases.push(createFeaturePhase(concept, feature, phaseNumber++));
+      featureToPhaseNumber.set(feature.id, tempPhaseNumber++);
+    }
+  }
+
+  // Now create the actual feature phases with correct dependencies
+  for (const feature of sortedFeatures) {
+    if (feature.priority === 'high') {
+      phases.push(createFeaturePhase(concept, feature, phaseNumber++, featureToPhaseNumber));
     }
   }
 
@@ -249,7 +259,12 @@ Make the auth UI match the ${concept.uiPreferences.style} design style.`;
 /**
  * Create a phase for a single feature
  */
-function createFeaturePhase(concept: AppConcept, feature: Feature, phaseNumber: number): BuildPhase {
+function createFeaturePhase(
+  concept: AppConcept,
+  feature: Feature,
+  phaseNumber: number,
+  featureToPhaseNumber: Map<string, number>
+): BuildPhase {
   const prompt = `Implement the "${feature.name}" feature for "${concept.name}".
 
 **Feature Description**: ${feature.description}
@@ -264,6 +279,22 @@ Build this feature with:
 
 Make sure it integrates seamlessly with the existing app structure.`;
 
+  // Resolve feature dependencies to phase IDs
+  let dependencies: string[];
+  if (feature.dependencies && feature.dependencies.length > 0) {
+    dependencies = feature.dependencies.map(depId => {
+      const depPhaseNumber = featureToPhaseNumber.get(depId);
+      if (depPhaseNumber !== undefined) {
+        return `phase-${depPhaseNumber}`;
+      }
+      // If dependency not found in feature mapping, fall back to previous phase
+      console.warn(`Feature dependency ${depId} not found in phase mapping, using previous phase`);
+      return `phase-${phaseNumber - 1}`;
+    });
+  } else {
+    dependencies = [`phase-${phaseNumber - 1}`];
+  }
+
   return {
     id: `phase-${phaseNumber}`,
     phaseNumber,
@@ -276,11 +307,7 @@ Make sure it integrates seamlessly with the existing app structure.`;
       'Ensure proper integration',
     ],
     prompt,
-    dependencies: feature.dependencies?.map(depId => {
-      const depFeature = concept.coreFeatures.find(f => f.id === depId);
-      // Find the phase for this dependency
-      return `phase-feature-${depId}`;
-    }) || [`phase-${phaseNumber - 1}`],
+    dependencies,
     features: [feature.id],
     estimatedComplexity: 'moderate',
     status: 'pending',

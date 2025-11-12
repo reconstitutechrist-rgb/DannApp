@@ -105,6 +105,7 @@ export default function AIBuilder() {
   const [showConceptWizard, setShowConceptWizard] = useState(false);
   const [implementationPlan, setImplementationPlan] = useState<ImplementationPlan | null>(null);
   const [guidedBuildMode, setGuidedBuildMode] = useState(false);
+  const autoSendMessageRef = useRef(false);
 
   // Tab controls
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code'>('chat');
@@ -299,6 +300,53 @@ export default function AIBuilder() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undoStack, redoStack, currentComponent]);
+
+  // Auto-send message for phase start (handles race condition)
+  useEffect(() => {
+    if (autoSendMessageRef.current && userInput.trim()) {
+      autoSendMessageRef.current = false;
+      // Use a small delay to ensure all state updates have completed
+      const timer = setTimeout(() => {
+        sendMessage();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [userInput]);
+
+  // Save implementation plan to localStorage whenever it changes
+  useEffect(() => {
+    if (implementationPlan) {
+      localStorage.setItem('implementation_plan', JSON.stringify(implementationPlan));
+      localStorage.setItem('guided_build_mode', JSON.stringify(guidedBuildMode));
+    } else {
+      localStorage.removeItem('implementation_plan');
+      localStorage.removeItem('guided_build_mode');
+    }
+  }, [implementationPlan, guidedBuildMode]);
+
+  // Load implementation plan from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPlan = localStorage.getItem('implementation_plan');
+      const savedMode = localStorage.getItem('guided_build_mode');
+
+      if (savedPlan) {
+        try {
+          const plan = JSON.parse(savedPlan) as ImplementationPlan;
+          setImplementationPlan(plan);
+
+          if (savedMode) {
+            const mode = JSON.parse(savedMode) as boolean;
+            setGuidedBuildMode(mode);
+          }
+        } catch (error) {
+          console.error('Failed to load implementation plan from localStorage:', error);
+          localStorage.removeItem('implementation_plan');
+          localStorage.removeItem('guided_build_mode');
+        }
+      }
+    }
+  }, []);
 
   // Load components from localStorage
   useEffect(() => {
@@ -1558,9 +1606,6 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
       setImplementationPlan(updatedPlan);
     }
 
-    // Set the phase prompt as user input
-    setUserInput(phase.prompt);
-
     // Add phase message to chat
     const phaseMessage: ChatMessage = {
       id: `phase-${Date.now()}`,
@@ -1570,10 +1615,10 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     };
     setChatMessages(prev => [...prev, phaseMessage]);
 
-    // Auto-submit the prompt
-    setTimeout(() => {
-      sendMessage();
-    }, 100);
+    // Set the phase prompt as user input and trigger auto-send
+    // Using ref to trigger useEffect for reliable state-based sending
+    autoSendMessageRef.current = true;
+    setUserInput(phase.prompt);
   };
 
   // Handle guided build mode exit
