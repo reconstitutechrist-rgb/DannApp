@@ -8,9 +8,13 @@ import DiffPreview from './DiffPreview';
 import ThemeSelector from './ThemeSelector';
 import TemplateSelector from './TemplateSelector';
 import PhaseProgress from './PhaseProgress';
+import AppConceptWizard from './AppConceptWizard';
+import GuidedBuildView from './GuidedBuildView';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
+import { generateImplementationPlan } from '../utils/planGenerator';
+import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
 
 // Base44-inspired layout with conversation-first design + your dark colors
 
@@ -96,7 +100,12 @@ export default function AIBuilder() {
   
   // Version history
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  
+
+  // App Concept & Implementation Plan
+  const [showConceptWizard, setShowConceptWizard] = useState(false);
+  const [implementationPlan, setImplementationPlan] = useState<ImplementationPlan | null>(null);
+  const [guidedBuildMode, setGuidedBuildMode] = useState(false);
+
   // Tab controls
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code'>('chat');
   
@@ -1518,6 +1527,61 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     localStorage.setItem('layout-mode', mode);
   };
 
+  // Handle App Concept completion
+  const handleConceptComplete = (concept: AppConcept) => {
+    // Generate implementation plan
+    const plan = generateImplementationPlan(concept);
+    setImplementationPlan(plan);
+    setShowConceptWizard(false);
+    setGuidedBuildMode(true);
+
+    // Add a system message
+    const systemMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'system',
+      content: `✨ Implementation plan generated for "${concept.name}"! You'll be guided through ${plan.phases.length} phases to build your app step-by-step.`,
+      timestamp: new Date().toISOString(),
+    };
+    setChatMessages([systemMessage]);
+  };
+
+  // Handle phase start
+  const handlePhaseStart = async (phase: BuildPhase) => {
+    // Update plan to mark phase as in-progress
+    if (implementationPlan) {
+      const updatedPlan = {
+        ...implementationPlan,
+        phases: implementationPlan.phases.map(p =>
+          p.id === phase.id ? { ...p, status: 'in-progress' as const } : p
+        ),
+      };
+      setImplementationPlan(updatedPlan);
+    }
+
+    // Set the phase prompt as user input
+    setUserInput(phase.prompt);
+
+    // Add phase message to chat
+    const phaseMessage: ChatMessage = {
+      id: `phase-${Date.now()}`,
+      role: 'user',
+      content: phase.prompt,
+      timestamp: new Date().toISOString(),
+    };
+    setChatMessages(prev => [...prev, phaseMessage]);
+
+    // Auto-submit the prompt
+    setTimeout(() => {
+      sendMessage();
+    }, 100);
+  };
+
+  // Handle guided build mode exit
+  const handleExitGuidedMode = () => {
+    setGuidedBuildMode(false);
+    // Keep the plan in case they want to resume
+  };
+
   // Handle architecture template selection
   const handleTemplateSelect = (template: ArchitectureTemplate | null) => {
     setSelectedTemplate(template);
@@ -1565,6 +1629,28 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
             {/* Actions */}
             <div className="flex items-center gap-3">
+              {/* App Concept Wizard Button */}
+              <button
+                onClick={() => setShowConceptWizard(true)}
+                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm font-medium transition-all shadow-lg shadow-purple-500/20"
+                title="Plan your app with guided wizard"
+              >
+                <span>🎯</span>
+                <span>Plan App</span>
+              </button>
+
+              {/* Resume Plan Button (if plan exists but not in guided mode) */}
+              {implementationPlan && !guidedBuildMode && (
+                <button
+                  onClick={() => setGuidedBuildMode(true)}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-all"
+                  title="Resume implementation plan"
+                >
+                  <span>▶️</span>
+                  <span>Resume Plan</span>
+                </button>
+              )}
+
               {/* Layout Selector */}
               <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
                 <button
@@ -1673,9 +1759,20 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             minSize={20}
             maxSize={80}
           >
-            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-full">
-              {/* Chat Header */}
-              <div className="px-6 py-4 border-b border-white/10 bg-black/20">
+            {/* Guided Build Mode View */}
+            {guidedBuildMode && implementationPlan ? (
+              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden h-full">
+                <GuidedBuildView
+                  plan={implementationPlan}
+                  onPhaseStart={handlePhaseStart}
+                  onUpdatePlan={setImplementationPlan}
+                  onExit={handleExitGuidedMode}
+                />
+              </div>
+            ) : (
+              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-full">
+                {/* Chat Header */}
+                <div className="px-6 py-4 border-b border-white/10 bg-black/20">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                     <span>💬</span>
@@ -1839,6 +1936,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </div>
               </div>
             </div>
+            )}
           </Panel>
 
           {/* Resizable Divider */}
@@ -2874,6 +2972,14 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
             </div>
           </div>
         </div>
+      )}
+
+      {/* App Concept Wizard Modal */}
+      {showConceptWizard && (
+        <AppConceptWizard
+          onComplete={handleConceptComplete}
+          onCancel={() => setShowConceptWizard(false)}
+        />
       )}
     </div>
   );
