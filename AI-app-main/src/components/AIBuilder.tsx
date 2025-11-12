@@ -10,6 +10,7 @@ import TemplateSelector from './TemplateSelector';
 import PhaseProgress from './PhaseProgress';
 import AppConceptWizard from './AppConceptWizard';
 import GuidedBuildView from './GuidedBuildView';
+import StreamingProgressDisplay from './StreamingProgressDisplay';
 import { exportAppAsZip, downloadBlob, parseAppFiles, getDeploymentInstructions, type DeploymentInstructions } from '../utils/exportApp';
 import { ThemeManager } from '../utils/themeSystem';
 import { detectComplexity, generateTemplatePrompt, type ArchitectureTemplate } from '../utils/architectureTemplates';
@@ -111,6 +112,23 @@ export default function AIBuilder() {
 
   // Context Management - Semantic Memory & Compression
   const conversationMemory = useRef<ConversationMemory | null>(null);
+
+  // Streaming generation state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingProgress, setStreamingProgress] = useState<{
+    phase: 'architecture' | 'files' | 'complete' | 'error';
+    message: string;
+    percentComplete: number;
+    currentFile?: string;
+    fileIndex?: number;
+    totalFiles?: number;
+    files: Array<{ path: string; status: 'pending' | 'generating' | 'complete'; content?: string }>;
+  }>({
+    phase: 'architecture',
+    message: '',
+    percentComplete: 0,
+    files: []
+  });
 
   // Tab controls
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code'>('chat');
@@ -445,6 +463,184 @@ export default function AIBuilder() {
     }
 
     return compressed.messages;
+  };
+
+  /**
+   * Handle streaming generation for large apps with real-time progress
+   */
+  const handleStreamingGeneration = async (userPrompt: string, optimizedContext: ChatMessage[]) => {
+    setIsStreaming(true);
+    setStreamingProgress({
+      phase: 'architecture',
+      message: 'Starting generation...',
+      percentComplete: 0,
+      files: []
+    });
+
+    try {
+      const response = await fetch('/api/ai-builder/streaming-generation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userPrompt,
+          conversationHistory: optimizedContext
+        })
+      });
+
+      if (!response.body) {
+        throw new Error('No response body for streaming');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalResult: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.substring(6);
+            try {
+              const event = JSON.parse(jsonStr);
+
+              if (event.type === 'result') {
+                finalResult = event.data;
+                continue;
+              }
+
+              // Update streaming progress based on event type
+              if (event.type === 'architecture') {
+                setStreamingProgress(prev => ({
+                  ...prev,
+                  phase: 'architecture',
+                  message: event.message,
+                  percentComplete: event.percentComplete || 0,
+                  totalFiles: event.totalFiles
+                }));
+              } else if (event.type === 'file') {
+                setStreamingProgress(prev => {
+                  // Update files list
+                  const updatedFiles = [...prev.files];
+                  const fileIndex = updatedFiles.findIndex(f => f.path === event.fileName);
+
+                  if (fileIndex >= 0) {
+                    // Update existing file
+                    updatedFiles[fileIndex] = {
+                      path: event.fileName,
+                      status: event.fileContent ? 'complete' : 'generating',
+                      content: event.fileContent
+                    };
+                  } else {
+                    // Add new file
+                    updatedFiles.push({
+                      path: event.fileName,
+                      status: event.fileContent ? 'complete' : 'generating',
+                      content: event.fileContent
+                    });
+                  }
+
+                  return {
+                    ...prev,
+                    phase: 'files',
+                    message: event.message,
+                    percentComplete: event.percentComplete || 0,
+                    currentFile: event.fileName,
+                    fileIndex: event.fileIndex,
+                    totalFiles: event.totalFiles,
+                    files: updatedFiles
+                  };
+                });
+              } else if (event.type === 'complete') {
+                setStreamingProgress(prev => ({
+                  ...prev,
+                  phase: 'complete',
+                  message: event.message,
+                  percentComplete: 100
+                }));
+              } else if (event.type === 'error') {
+                setStreamingProgress(prev => ({
+                  ...prev,
+                  phase: 'error',
+                  message: event.message
+                }));
+              }
+            } catch (e) {
+              console.error('Error parsing streaming event:', e);
+            }
+          }
+        }
+      }
+
+      // Process final result
+      if (finalResult) {
+        const aiAppMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `🚀 App created\n\n${finalResult.description || `I've created your ${finalResult.name} app with ${finalResult.files?.length || 0} files!`}`,
+          timestamp: new Date().toISOString(),
+          componentCode: JSON.stringify(finalResult),
+          componentPreview: !!finalResult.files
+        };
+
+        // Add to semantic memory
+        if (conversationMemory.current) {
+          conversationMemory.current.addMemory(aiAppMessage);
+        }
+
+        setChatMessages(prev => [...prev, aiAppMessage]);
+
+        // Save the generated component
+        const newComponent: GeneratedComponent = {
+          id: Date.now().toString(),
+          name: finalResult.name,
+          code: JSON.stringify(finalResult, null, 2),
+          description: finalResult.description || 'AI-generated app',
+          timestamp: new Date().toISOString(),
+          isFavorite: false,
+          conversationHistory: [...chatMessages, aiAppMessage],
+          versions: [{
+            id: `v-${Date.now()}`,
+            versionNumber: 1,
+            code: JSON.stringify(finalResult, null, 2),
+            description: 'Initial version',
+            timestamp: new Date().toISOString(),
+            changeType: 'NEW_APP'
+          }]
+        };
+
+        setCurrentComponent(newComponent);
+        setComponents(prev => [newComponent, ...prev].slice(0, 50));
+        setActiveTab('preview');
+      }
+
+      setIsStreaming(false);
+      setIsGenerating(false);
+    } catch (error) {
+      console.error('Streaming generation error:', error);
+      setStreamingProgress(prev => ({
+        ...prev,
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      }));
+      setIsStreaming(false);
+      setIsGenerating(false);
+
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `❌ Error generating app: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    }
   };
 
   const sendMessage = async () => {
@@ -899,7 +1095,23 @@ Reply **'proceed'** to continue with staged implementation, or **'cancel'** to t
         requestBody.image = uploadedImage;
         requestBody.hasImage = true;
       }
-      
+
+      // Detect if streaming should be used (for large/complex new apps)
+      const complexityResult = detectComplexity(userInput);
+      const useStreaming = !isQuestion &&
+                           !useDiffSystem &&
+                           currentMode === 'ACT' &&
+                           !currentComponent &&
+                           (complexityResult.complexity === 'COMPLEX' || complexityResult.complexity === 'VERY_COMPLEX');
+
+      // Use streaming for complex apps
+      if (useStreaming) {
+        clearInterval(progressInterval);
+        setGenerationProgress('');
+        await handleStreamingGeneration(userInput, optimizedContext);
+        return; // Exit early, streaming handles the rest
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1951,7 +2163,22 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   </div>
                 )}
 
-                {isGenerating && (
+                {/* Streaming Progress Display */}
+                {isStreaming && (
+                  <div className="my-4">
+                    <StreamingProgressDisplay
+                      phase={streamingProgress.phase}
+                      message={streamingProgress.message}
+                      percentComplete={streamingProgress.percentComplete}
+                      currentFile={streamingProgress.currentFile}
+                      fileIndex={streamingProgress.fileIndex}
+                      totalFiles={streamingProgress.totalFiles}
+                      files={streamingProgress.files}
+                    />
+                  </div>
+                )}
+
+                {isGenerating && !isStreaming && (
                   <div className="flex justify-start">
                     <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl px-4 py-3 border border-blue-500/30">
                       <div className="flex items-center gap-3">
