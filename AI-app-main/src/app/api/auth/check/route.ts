@@ -1,18 +1,23 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-
-const SITE_PASSWORD = process.env.SITE_PASSWORD;
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const authCookie = cookieStore.get('site-auth');
+    const supabase = await createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
 
-    if (authCookie?.value === SITE_PASSWORD) {
-      return NextResponse.json({ authenticated: true });
+    if (error || !user) {
+      return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    return NextResponse.json({ authenticated: false }, { status: 401 });
+    return NextResponse.json({
+      authenticated: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name
+      }
+    });
   } catch (error) {
     return NextResponse.json({ authenticated: false }, { status: 500 });
   }
