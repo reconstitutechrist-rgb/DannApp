@@ -2324,26 +2324,26 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
   // Prevent hydration errors by only rendering after client mount
   if (!isClient) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-slate-400">Loading...</div>
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="text-neutral-400">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-neutral-950">
       {/* Header */}
-      <header className="border-b border-white/10 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-neutral-800 bg-neutral-900/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                <span className="text-2xl">✨</span>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary-600 flex items-center justify-center">
+                <span className="text-xl">✨</span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">AI App Builder</h1>
-                <p className="text-xs text-slate-400">Build complete apps through conversation</p>
+                <h1 className="text-lg font-semibold text-neutral-50">AI App Builder</h1>
+                <p className="text-xs text-neutral-500">Build complete apps through conversation</p>
               </div>
             </div>
 
@@ -2352,7 +2352,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               {/* App Concept Wizard Button */}
               <button
                 onClick={() => setShowConceptWizard(true)}
-                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm font-medium transition-all shadow-lg shadow-purple-500/20"
+                className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-all"
                 title="Plan your app with guided wizard"
               >
                 <span>🎯</span>
@@ -2363,7 +2363,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               {implementationPlan && !guidedBuildMode && (
                 <button
                   onClick={() => setGuidedBuildMode(true)}
-                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-all"
+                  className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-lg bg-accent-success hover:bg-accent-success/90 text-white text-sm font-medium transition-all"
                   title="Resume implementation plan"
                 >
                   <span>▶️</span>
@@ -2372,13 +2372,13 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               )}
 
               {/* Layout Selector */}
-              <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+              <div className="hidden md:flex items-center gap-1 bg-neutral-800 rounded-lg p-1">
                 <button
                   onClick={() => handleLayoutChange('classic')}
                   className={`px-2 py-1 rounded text-xs transition-all ${
                     layoutMode === 'classic'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-neutral-400 hover:text-neutral-50 hover:bg-neutral-700'
                   }`}
                   title="Classic (50/50 split)"
                 >
@@ -2388,8 +2388,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   onClick={() => handleLayoutChange('preview-first')}
                   className={`px-2 py-1 rounded text-xs transition-all ${
                     layoutMode === 'preview-first'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-neutral-400 hover:text-neutral-50 hover:bg-neutral-700'
                   }`}
                   title="Preview First (70/30 split)"
                 >
@@ -2399,8 +2399,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   onClick={() => handleLayoutChange('code-first')}
                   className={`px-2 py-1 rounded text-xs transition-all ${
                     layoutMode === 'code-first'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-neutral-400 hover:text-neutral-50 hover:bg-neutral-700'
                   }`}
                   title="Code First (30/70 split)"
                 >
@@ -2410,8 +2410,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   onClick={() => handleLayoutChange('stacked')}
                   className={`px-2 py-1 rounded text-xs transition-all ${
                     layoutMode === 'stacked'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-neutral-400 hover:text-neutral-50 hover:bg-neutral-700'
                   }`}
                   title="Stacked (vertical)"
                 >
@@ -2435,11 +2435,11 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               {currentComponent && currentComponent.versions && currentComponent.versions.length > 0 && (
                 <button
                   onClick={() => setShowVersionHistory(!showVersionHistory)}
-                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 transition-all text-sm text-neutral-300 hover:text-neutral-50 flex items-center gap-2"
                 >
                   <span>🕒</span>
                   <span className="hidden sm:inline">History</span>
-                  <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-primary-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">
                     {currentComponent.versions.length}
                   </span>
                 </button>
@@ -2451,13 +2451,13 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   <button
                     onClick={() => handleRunCodeReview()}
                     disabled={isRunningReview}
-                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-green-500/20"
+                    className="px-3.5 py-2 rounded-lg bg-accent-success hover:bg-accent-success/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm text-white flex items-center gap-2"
                     title="Analyze code quality and get improvement suggestions"
                   >
                     <span>🔍</span>
                     <span className="hidden md:inline">{isRunningReview ? 'Reviewing...' : 'Review Quality'}</span>
                     {qualityReport && !isRunningReview && (
-                      <span className={`text-xs px-2 py-0.5 rounded ${getGradeColor(qualityReport.grade)}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${getGradeColor(qualityReport.grade)}`}>
                         {qualityReport.grade}
                       </span>
                     )}
@@ -2468,8 +2468,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                     onClick={() => setAutoReviewEnabled(!autoReviewEnabled)}
                     className={`px-3 py-2 rounded-lg border transition-all text-xs flex items-center gap-1 ${
                       autoReviewEnabled
-                        ? 'bg-green-600 border-green-500 text-white'
-                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                        ? 'bg-accent-success border-accent-success text-white'
+                        : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-50'
                     }`}
                     title={autoReviewEnabled ? 'Auto-review enabled (reviews on every change)' : 'Enable auto-review (continuous monitoring)'}
                   >
@@ -2483,7 +2483,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               {qualityReport && !isRunningReview && (
                 <button
                   onClick={() => setShowQualityReport(true)}
-                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 transition-all text-sm text-neutral-300 hover:text-neutral-50 flex items-center gap-2"
                   title="View detailed quality report"
                 >
                   <span>📊</span>
@@ -2496,13 +2496,13 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 <button
                   onClick={() => handleRunPerformanceAnalysis()}
                   disabled={isRunningPerformanceAnalysis}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed border border-orange-500/30 transition-all text-sm text-white flex items-center gap-2 shadow-lg shadow-orange-500/20"
+                  className="px-3.5 py-2 rounded-lg bg-accent-warning hover:bg-accent-warning/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm text-white flex items-center gap-2"
                   title="Analyze app performance and get optimization suggestions"
                 >
                   <span>⚡</span>
                   <span className="hidden md:inline">{isRunningPerformanceAnalysis ? 'Analyzing...' : 'Optimize Performance'}</span>
                   {performanceReport && !isRunningPerformanceAnalysis && (
-                    <span className={`text-xs px-2 py-0.5 rounded ${getPerformanceGradeColor(performanceReport.grade)}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${getPerformanceGradeColor(performanceReport.grade)}`}>
                       {performanceReport.grade}
                     </span>
                   )}
@@ -2513,7 +2513,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               {performanceReport && !isRunningPerformanceAnalysis && (
                 <button
                   onClick={() => setShowPerformanceReport(true)}
-                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                  className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 transition-all text-sm text-neutral-300 hover:text-neutral-50 flex items-center gap-2"
                   title="View detailed performance report"
                 >
                   <span>📈</span>
@@ -2523,12 +2523,12 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
               <button
                 onClick={() => setShowLibrary(!showLibrary)}
-                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm text-slate-300 hover:text-white flex items-center gap-2"
+                className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 transition-all text-sm text-neutral-300 hover:text-neutral-50 flex items-center gap-2"
               >
                 <span>📂</span>
                 <span className="hidden sm:inline">My Apps</span>
                 {components.length > 0 && (
-                  <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-primary-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">
                     {components.length}
                   </span>
                 )}
@@ -2558,7 +2558,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
           >
             {/* Guided Build Mode View */}
             {guidedBuildMode && implementationPlan ? (
-              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden h-full">
+              <div className="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden h-full">
                 <GuidedBuildView
                   plan={implementationPlan}
                   onPhaseStart={handlePhaseStart}
@@ -2567,9 +2567,9 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 />
               </div>
             ) : (
-              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-full">
+              <div className="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden flex flex-col h-full">
                 {/* Chat Header */}
-                <div className="px-6 py-4 border-b border-white/10 bg-black/20">
+                <div className="px-6 py-4 border-b border-neutral-800 bg-neutral-850">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                     <span>💬</span>
@@ -2577,13 +2577,13 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                   </h2>
                   
                   {/* Plan/Act Mode Toggle */}
-                  <div className="flex gap-2 bg-slate-900/50 p-1 rounded-lg border border-white/10">
+                  <div className="flex gap-1 bg-neutral-800 p-1 rounded-lg">
                     <button
                       onClick={() => setCurrentMode('PLAN')}
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                         currentMode === 'PLAN'
-                          ? 'bg-purple-600 text-white shadow-lg'
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          ? 'bg-primary-600 text-white'
+                          : 'text-neutral-400 hover:text-neutral-50 hover:bg-neutral-700'
                       }`}
                       title="Plan Mode: AI discusses and explains (no code changes)"
                     >
@@ -2593,8 +2593,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                       onClick={() => setCurrentMode('ACT')}
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                         currentMode === 'ACT'
-                          ? 'bg-blue-600 text-white shadow-lg'
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          ? 'bg-primary-600 text-white'
+                          : 'text-neutral-400 hover:text-neutral-50 hover:bg-neutral-700'
                       }`}
                       title="Act Mode: AI can modify code"
                     >
@@ -2604,8 +2604,8 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </div>
                 
                 {/* Mode Description */}
-                <p className="text-sm text-slate-400">
-                  {currentMode === 'PLAN' 
+                <p className="text-sm text-neutral-500">
+                  {currentMode === 'PLAN'
                     ? '💭 Plan Mode: AI will discuss and explain (no code changes)'
                     : '⚡ Act Mode: AI can modify your app'
                   }
@@ -2620,19 +2620,19 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                      className={`max-w-[80%] rounded-xl px-4 py-3 ${
                         message.role === 'user'
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-primary-600 text-white'
                           : message.role === 'system'
-                          ? 'bg-purple-600/20 text-purple-200 border border-purple-500/30'
-                          : 'bg-white/10 text-slate-200 border border-white/10'
+                          ? 'bg-primary-600/10 text-primary-200 border border-primary-500/20'
+                          : 'bg-neutral-800 text-neutral-100 border border-neutral-700'
                       }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                       {message.componentPreview && (
                         <button
                           onClick={() => setActiveTab('preview')}
-                          className="mt-3 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-all"
+                          className="mt-3 text-xs px-3 py-1.5 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-all"
                         >
                           👁️ View Component
                         </button>
@@ -2671,17 +2671,17 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
                 {isGenerating && !isStreaming && (
                   <div className="flex justify-start">
-                    <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl px-4 py-3 border border-blue-500/30">
+                    <div className="bg-neutral-800 rounded-xl px-4 py-3 border border-neutral-700">
                       <div className="flex items-center gap-3">
                         <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-white">Generating your app...</div>
+                          <div className="text-sm font-medium text-neutral-50">Generating your app...</div>
                           {generationProgress && (
-                            <div className="text-xs text-blue-200 mt-1">{generationProgress}</div>
+                            <div className="text-xs text-neutral-400 mt-1">{generationProgress}</div>
                           )}
                         </div>
                       </div>
@@ -2691,31 +2691,31 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               </div>
 
               {/* Input Area */}
-              <div className="p-4 border-t border-white/10 bg-black/20">
+              <div className="p-4 border-t border-neutral-800 bg-neutral-850">
                 {/* Image Preview */}
                 {uploadedImage && (
                   <div className="mb-3 relative inline-block">
-                    <img 
-                      src={uploadedImage} 
-                      alt="Uploaded inspiration" 
-                      className="h-20 w-20 object-cover rounded-lg border-2 border-blue-500"
+                    <img
+                      src={uploadedImage}
+                      alt="Uploaded inspiration"
+                      className="h-20 w-20 object-cover rounded-lg border-2 border-primary-500"
                     />
                     <button
                       onClick={removeImage}
-                      className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold"
+                      className="absolute -top-2 -right-2 bg-accent-error hover:bg-accent-error/90 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold"
                     >
                       ✕
                     </button>
-                    <div className="text-xs text-slate-400 mt-1">
+                    <div className="text-xs text-neutral-400 mt-1">
                       🎨 AI will use this for design inspiration
                     </div>
                   </div>
                 )}
-                
+
                 <div className="flex gap-2">
                   {/* Image Upload Button */}
                   <label
-                    className="px-3 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-white cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+                    className="px-3 py-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white cursor-pointer transition-all flex items-center justify-center"
                     title="Upload image for AI-inspired design"
                   >
                     <span className="text-xl">🖼️</span>
@@ -2735,13 +2735,13 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Describe what you want to build or change..."
                     disabled={isGenerating}
-                    className="flex-1 px-4 py-3 rounded-xl bg-slate-900/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                    className="flex-1 px-4 py-3 rounded-lg bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
                   />
                   <button
                     onClick={sendMessage}
                     disabled={isGenerating || (!userInput.trim() && !uploadedImage)}
                     data-send-button="true"
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:shadow-lg hover:shadow-blue-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+                    className="px-6 py-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isGenerating ? '⏳' : '🚀'}
                   </button>
@@ -2754,13 +2754,13 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
           {/* Resizable Divider */}
           <PanelResizeHandle className={`
             ${layoutMode === 'stacked' ? 'h-2 my-2' : 'w-2 mx-2'}
-            bg-white/10 hover:bg-blue-500/50 transition-colors rounded-full
+            bg-neutral-800 hover:bg-primary-600/50 transition-colors rounded-full
             ${layoutMode === 'stacked' ? 'cursor-row-resize' : 'cursor-col-resize'}
             flex items-center justify-center group
           `}>
             <div className={`
               ${layoutMode === 'stacked' ? 'w-12 h-1' : 'w-1 h-12'}
-              bg-white/20 group-hover:bg-blue-400 transition-colors rounded-full
+              bg-neutral-700 group-hover:bg-primary-500 transition-colors rounded-full
             `} />
           </PanelResizeHandle>
 

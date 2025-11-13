@@ -66,13 +66,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-white/10 p-8 shadow-2xl">
+        <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-8 shadow-xl-subtle">
           {/* Logo/Title */}
           <div className="text-center mb-8">
-            <div className="text-6xl mb-4">🤖</div>
-            <h1 className="text-3xl font-bold text-white mb-2">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-lg bg-primary-600 flex items-center justify-center">
+              <span className="text-4xl">🤖</span>
+            </div>
+            <h1 className="text-3xl font-semibold text-neutral-50 mb-2">
               AI App Builder
             </h1>
             <p className="text-slate-400">
@@ -151,7 +153,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-neutral-300 mb-2">
                 Password
               </label>
               <input
@@ -168,7 +170,7 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
+              <div className="bg-accent-error/10 border border-accent-error/50 rounded-lg p-3 text-red-400 text-sm">
                 {error}
               </div>
             )}
