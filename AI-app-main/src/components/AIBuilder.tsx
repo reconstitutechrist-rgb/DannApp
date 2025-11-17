@@ -2735,7 +2735,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Describe what you want to build or change..."
                     disabled={isGenerating}
-                    className="flex-1 px-4 py-3 rounded-lg bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
+                    className="flex-1 px-4 py-3 rounded-lg bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
                   />
                   <button
                     onClick={sendMessage}
@@ -2933,7 +2933,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search apps..."
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-white/10 text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-purple-500"
               />
             </div>
 

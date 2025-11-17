@@ -146,7 +146,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g., TaskMaster Pro"
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -159,7 +159,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="A brief description of what your app does..."
                   rows={3}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -172,7 +172,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   onChange={(e) => setPurpose(e.target.value)}
                   placeholder="What problem does this app solve? What value does it provide?"
                   rows={3}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -185,7 +185,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   value={targetUsers}
                   onChange={(e) => setTargetUsers(e.target.value)}
                   placeholder="e.g., Freelancers, students, small business owners"
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -212,7 +212,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                     value={featureName}
                     onChange={(e) => setFeatureName(e.target.value)}
                     placeholder="e.g., Task Management"
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -225,7 +225,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                     onChange={(e) => setFeatureDesc(e.target.value)}
                     placeholder="Describe what this feature does..."
                     rows={2}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -236,7 +236,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   <select
                     value={featurePriority}
                     onChange={(e) => setFeaturePriority(e.target.value as any)}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="high">High - Must have</option>
                     <option value="medium">Medium - Should have</option>
@@ -390,7 +390,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   value={uiPreferences.primaryColor || ''}
                   onChange={(e) => setUIPreferences({ ...uiPreferences, primaryColor: e.target.value })}
                   placeholder="e.g., blue, #3B82F6, rgb(59, 130, 246)"
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -441,7 +441,7 @@ export default function AppConceptWizard({ onComplete, onCancel }: AppConceptWiz
                   <select
                     value={technical.authType || 'simple'}
                     onChange={(e) => setTechnical({ ...technical, authType: e.target.value as any })}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="simple">Simple (Password only)</option>
                     <option value="email">Email & Password</option>
