@@ -381,6 +381,47 @@ export const THEMES: Record<string, Theme> = {
       buttonSecondary: '#434c5e',
       buttonSecondaryHover: '#4c566a',
     }
+  },
+
+  // Futuristic theme - Subtle and refined
+  futuristic: {
+    id: 'futuristic',
+    name: 'Futuristic',
+    description: 'Subtle futuristic design with refined accents',
+    isDark: true,
+    colors: {
+      primary: '#06b6d4',        // Soft cyan
+      secondary: '#8b5cf6',      // Muted violet
+      accent: '#3b82f6',         // Clean blue
+
+      bgPrimary: '#0a0a0b',      // Deep space black
+      bgSecondary: '#121214',    // Charcoal
+      bgTertiary: '#1a1a1d',     // Elevated surface
+
+      textPrimary: '#fafafa',    // Pure white
+      textSecondary: '#a1a1aa',  // Soft gray
+      textMuted: '#71717a',      // Muted gray
+
+      border: 'rgba(255, 255, 255, 0.08)',  // Subtle border
+      divider: 'rgba(255, 255, 255, 0.05)', // Even subtler divider
+
+      success: '#10b981',        // Emerald
+      warning: '#f59e0b',        // Amber
+      error: '#ef4444',          // Red
+      info: '#06b6d4',           // Cyan
+
+      userMessageBg: '#0e7490',  // Darker cyan
+      assistantMessageBg: '#1a1a1d',
+      systemMessageBg: '#1e1e21',
+
+      codeBackground: '#0a0a0b',
+      codeBorder: 'rgba(255, 255, 255, 0.08)',
+
+      buttonPrimary: '#06b6d4',
+      buttonPrimaryHover: '#0891b2',
+      buttonSecondary: '#1a1a1d',
+      buttonSecondaryHover: '#27272a',
+    }
   }
 };
 

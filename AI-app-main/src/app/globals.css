@@ -1,20 +1,32 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @import "tailwindcss";
 @config "../../tailwind.config.js";
 
 :root {
-  /* Modern minimalist color system */
-  --bg-primary: #16191c;
-  --bg-secondary: #212529;
-  --bg-tertiary: #2b3035;
-  --text-primary: #f8f9fa;
-  --text-secondary: #adb5bd;
-  --text-tertiary: #868e96;
-  --border-primary: #343a40;
-  --border-secondary: #2b3035;
-  --accent-primary: #0c8ce9;
-  --accent-hover: #0070cc;
+  /* Refined Futuristic Color System */
+  --bg-primary: #0a0a0b;
+  --bg-secondary: #121214;
+  --bg-tertiary: #1a1a1d;
+  --bg-elevated: #1e1e21;
+  
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-muted: #52525b;
+  
+  --border-primary: rgba(255, 255, 255, 0.08);
+  --border-secondary: rgba(255, 255, 255, 0.05);
+  --border-accent: rgba(6, 182, 212, 0.3);
+  
+  --accent-primary: #06b6d4;
+  --accent-secondary: #8b5cf6;
+  --accent-tertiary: #3b82f6;
+  --accent-hover: #0891b2;
+  
+  /* Subtle glow effects */
+  --glow-subtle: 0 0 20px rgba(6, 182, 212, 0.1);
+  --glow-focus: 0 0 0 2px rgba(6, 182, 212, 0.2);
 }
 
 * {
@@ -40,50 +52,186 @@ body {
   font-weight: 400;
 }
 
-/* Typography improvements */
+/* Typography - Clean and Modern */
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
 }
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
 
 p {
   margin: 0;
+  color: var(--text-secondary);
 }
 
-/* Minimal reset for code previews */
-pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+/* Code elements */
+pre, code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
   margin: 0;
 }
 
-/* Smooth transitions */
+/* Smooth, minimal transitions */
 button, a, input, textarea, select {
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Focus styles for accessibility */
+/* Focus styles - subtle and clean */
 :focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--glow-focus);
 }
 
-/* Custom scrollbar for modern look */
+/* Custom scrollbar - minimal and refined */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(6, 182, 212, 0.3);
+  color: var(--text-primary);
+}
+
+/* Glass morphism utility - very subtle */
+.glass {
+  @apply bg-white/[0.02] backdrop-blur-md;
+}
+
+.glass-subtle {
+  @apply bg-white/[0.01] backdrop-blur-xs;
+}
+
+/* Modern ring focus utilities */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:ring-offset-0;
+}
+
+.focus-ring-subtle {
+  @apply focus:outline-none focus:ring-1 focus:ring-primary-500/30;
+}
+
+/* Gradient border utility - minimal */
+.gradient-border {
+  @apply relative;
+}
+
+.gradient-border::before {
+  content: '';
+  @apply absolute inset-0 rounded-[inherit] pointer-events-none;
+  padding: 1px;
+  background: linear-gradient(135deg, theme('colors.primary.500 / 0.2'), theme('colors.accent.violet / 0.2'));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Modern transition utilities */
+.transition-smooth {
+  @apply transition-all duration-150 ease-smooth;
+}
+
+.transition-colors-smooth {
+  @apply transition-colors duration-150 ease-smooth;
+}
+
+/* Hover glow utility - very subtle */
+.hover-glow {
+  transition: box-shadow 0.2s ease;
+}
+
+.hover-glow:hover {
+  box-shadow: var(--glow-subtle);
+}
+
+/* Input placeholder styling */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Button base styles */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Link styles */
+a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Subtle animation for loading states */
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+/* Smooth fade in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Panel divider styling */
+.panel-divider {
   background: var(--border-primary);
+  transition: background 0.2s ease;
+}
+
+.panel-divider:hover {
+  background: var(--accent-primary);
+  opacity: 0.5;
 }
