@@ -4,29 +4,30 @@
 @config "../../tailwind.config.js";
 
 :root {
-  /* Refined Futuristic Color System */
-  --bg-primary: #0a0a0b;
-  --bg-secondary: #121214;
-  --bg-tertiary: #1a1a1d;
-  --bg-elevated: #1e1e21;
+  /* BOLD Futuristic Color System - Deep Space */
+  --bg-primary: #0a0f1a;
+  --bg-secondary: #0d1218;
+  --bg-tertiary: #101620;
+  --bg-elevated: #141a28;
   
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
-  --text-muted: #52525b;
+  --text-primary: #ffffff;
+  --text-secondary: #b4b4ff;
+  --text-tertiary: #8080ff;
+  --text-muted: #5555aa;
   
-  --border-primary: rgba(255, 255, 255, 0.08);
-  --border-secondary: rgba(255, 255, 255, 0.05);
-  --border-accent: rgba(6, 182, 212, 0.3);
+  --border-primary: rgba(100, 100, 255, 0.3);
+  --border-secondary: rgba(100, 100, 255, 0.15);
+  --border-accent: rgba(0, 255, 200, 0.5);
   
-  --accent-primary: #06b6d4;
-  --accent-secondary: #8b5cf6;
-  --accent-tertiary: #3b82f6;
-  --accent-hover: #0891b2;
+  --accent-primary: #00ffcc;
+  --accent-secondary: #aa00ff;
+  --accent-tertiary: #0099ff;
+  --accent-hover: #00ddaa;
   
-  /* Subtle glow effects */
-  --glow-subtle: 0 0 20px rgba(6, 182, 212, 0.1);
-  --glow-focus: 0 0 0 2px rgba(6, 182, 212, 0.2);
+  /* DRAMATIC glow effects */
+  --glow-subtle: 0 0 30px rgba(0, 255, 200, 0.3);
+  --glow-focus: 0 0 20px rgba(0, 255, 200, 0.5);
+  --glow-neon: 0 0 40px rgba(170, 0, 255, 0.6);
 }
 
 * {
@@ -46,10 +47,26 @@ html, body, #__next {
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: var(--bg-primary);
+  background: linear-gradient(135deg, #0a0f1a 0%, #0d1520 50%, #0a0f18 100%);
+  background-attachment: fixed;
   color: var(--text-primary);
   line-height: 1.6;
   font-weight: 400;
+}
+
+/* Animated background effect - enhanced for better visibility */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(0, 255, 200, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(170, 0, 255, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* Typography - Clean and Modern */
@@ -98,18 +115,21 @@ button, a, input, textarea, select {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, #00ffcc, #aa00ff);
   border-radius: 3px;
+  box-shadow: 0 0 10px rgba(0, 255, 200, 0.5);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: linear-gradient(180deg, #00ddaa, #8800dd);
+  box-shadow: 0 0 15px rgba(0, 255, 200, 0.7);
 }
 
-/* Selection styling */
+/* Selection styling - NEON */
 ::selection {
-  background: rgba(6, 182, 212, 0.3);
-  color: var(--text-primary);
+  background: rgba(0, 255, 200, 0.3);
+  color: #ffffff;
+  text-shadow: 0 0 5px rgba(0, 255, 200, 0.5);
 }
 
 /* Glass morphism utility - very subtle */
@@ -234,4 +254,38 @@ a:hover {
 .panel-divider:hover {
   background: var(--accent-primary);
   opacity: 0.5;
+}
+
+/* Slide in right animation for toasts */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Custom scrollbar for modal/dialog components */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00ffcc, #aa00ff);
+  border-radius: 3px;
+  box-shadow: 0 0 8px rgba(0, 255, 200, 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00ddaa, #8800dd);
+  box-shadow: 0 0 12px rgba(0, 255, 200, 0.6);
 }

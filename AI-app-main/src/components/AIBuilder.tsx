@@ -11,6 +11,7 @@ import PhaseProgress from './PhaseProgress';
 import AppConceptWizard from './AppConceptWizard';
 import ConversationalAppWizard from './ConversationalAppWizard';
 import GuidedBuildView from './GuidedBuildView';
+import { QuickStartSelector, type QuickStartTemplate } from './QuickStartSelector';
 import StreamingProgressDisplay from './StreamingProgressDisplay';
 import CodeQualityReport from './CodeQualityReport';
 import PerformanceReport from './PerformanceReport';
@@ -25,6 +26,10 @@ import { generateImplementationPlan } from '../utils/planGenerator';
 import type { AppConcept, ImplementationPlan, BuildPhase } from '../types/appConcept';
 import { compressConversationHistory, compressToTokenLimit, estimateTokenCount } from '../utils/contextCompression';
 import { ConversationMemory } from '../utils/semanticMemory';
+import { generatePhasePrompt, extractCreatedFiles } from '../utils/phasePromptGenerator';
+import EnhancedPhaseReview from './EnhancedPhaseReview';
+import PhasePreview from './PhasePreview';
+import { useBuilderSettings } from '../hooks/useBuilderSettings';
 
 // Base44-inspired layout with conversation-first design + your dark colors
 
@@ -113,9 +118,20 @@ export default function AIBuilder() {
 
   // App Concept & Implementation Plan
   const [showConceptWizard, setShowConceptWizard] = useState(false);
+  const [showQuickStart, setShowQuickStart] = useState(false);
+  const [selectedQuickStartTemplate, setSelectedQuickStartTemplate] = useState<QuickStartTemplate | null>(null);
   const [implementationPlan, setImplementationPlan] = useState<ImplementationPlan | null>(null);
   const [guidedBuildMode, setGuidedBuildMode] = useState(false);
   const autoSendMessageRef = useRef(false);
+
+  // Track currently active BuildPhase for phase-driven building
+  const [activePhase, setActivePhase] = useState<BuildPhase | null>(null);
+  const phaseStartTimeRef = useRef<number | null>(null);
+
+  // Enhanced Phase Review System
+  const { settings, updateSettings } = useBuilderSettings();
+  const [showPhasePreview, setShowPhasePreview] = useState(false);
+  const [phaseToPreview, setPhaseToPreview] = useState<BuildPhase | null>(null);
 
   // Context Management - Semantic Memory & Compression
   const conversationMemory = useRef<ConversationMemory | null>(null);
@@ -1305,17 +1321,133 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
 
           // Create or update the app
           if (data.files && data.files.length > 0) {
-            // NEW: Check if this was a phased build completion
-            if (newAppStagePlan) {
+            // NEW: Check if this was a BuildPhase-driven build completion
+            if (activePhase && implementationPlan) {
+              // Extract created files from response (with null check)
+              const createdFiles = data ? extractCreatedFiles(data) : [];
+
+              // Calculate actual hours spent
+              const actualHours = phaseStartTimeRef.current
+                ? (Date.now() - phaseStartTimeRef.current) / (1000 * 60 * 60) // Convert to hours
+                : undefined;
+
+              // Capture phase reference before clearing (prevents race condition in setTimeout)
+              const completedPhase = activePhase;
+
+              // Check if should auto-approve based on user settings
+              const shouldAutoApprove = (
+                settings.review.autoApprovePhases === 'all' ||
+                (settings.review.autoApprovePhases === 'simple' &&
+                 activePhase.estimatedComplexity === 'simple')
+              );
+
+              if (shouldAutoApprove) {
+                // AUTO-APPROVE: Update phase and continue without review
+                const updatedPlan: ImplementationPlan = {
+                  ...implementationPlan,
+                  phases: implementationPlan.phases.map(p =>
+                    p.id === activePhase.id
+                      ? {
+                          ...p,
+                          status: 'completed' as const,
+                          result: {
+                            code: JSON.stringify(data, null, 2),
+                            componentName: data.name,
+                            completedAt: new Date().toISOString(),
+                            actualHours,
+                            filesCreated: createdFiles,
+                          },
+                        }
+                      : p
+                  ),
+                };
+                setImplementationPlan(updatedPlan);
+
+                // Clear active phase
+                setActivePhase(null);
+                phaseStartTimeRef.current = null;
+
+                // Show auto-approve notification
+                const autoApproveMessage: ChatMessage = {
+                  id: (Date.now() + 5).toString(),
+                  role: 'system',
+                  content: `✅ **Phase ${completedPhase.phaseNumber} auto-approved** (${completedPhase.estimatedComplexity} complexity)\n\n` +
+                    `${createdFiles.length} files created. Settings: Auto-approve ${settings.review.autoApprovePhases} phases.`,
+                  timestamp: new Date().toISOString()
+                };
+                setChatMessages(prev => [...prev, autoApproveMessage]);
+
+                // Continue to next phase or show completion (existing logic below will handle this)
+                const nextPhase = updatedPlan.phases.find(p => p.status === 'pending');
+
+                if (nextPhase) {
+                  setTimeout(() => {
+                    const nextPhaseMessage: ChatMessage = {
+                      id: (Date.now() + 10).toString(),
+                      role: 'assistant',
+                      content: `✅ **Phase ${completedPhase.phaseNumber}: ${completedPhase.name} - Complete!**\n\n` +
+                        `Files created:\n${createdFiles.map(f => `  • ${f}`).join('\n')}\n\n` +
+                        `---\n\n` +
+                        `**Ready for Phase ${nextPhase.phaseNumber}: ${nextPhase.name}**\n\n` +
+                        `${nextPhase.description}\n\n` +
+                        `Return to the **Guided Build** tab to start the next phase, or continue chatting to refine the current implementation.`,
+                      timestamp: new Date().toISOString()
+                    };
+                    setChatMessages(prev => [...prev, nextPhaseMessage]);
+                  }, 1000);
+                } else {
+                  setTimeout(() => {
+                    const completionMessage: ChatMessage = {
+                      id: (Date.now() + 10).toString(),
+                      role: 'assistant',
+                      content: `🎉 **All ${updatedPlan.phases.length} Phases Complete!**\n\n` +
+                        `Your **${updatedPlan.concept.name}** app is fully built according to the implementation plan!\n\n` +
+                        `Total files created: ${updatedPlan.phases.flatMap(p => p.result?.filesCreated || []).length}\n\n` +
+                        `Test it out and let me know if you'd like any adjustments!`,
+                      timestamp: new Date().toISOString()
+                    };
+                    setChatMessages(prev => [...prev, completionMessage]);
+                  }, 1000);
+                }
+                // Skip showing diff preview - auto-approved!
+                return; // Exit early, don't show review modal
+              }
+
+              // MANUAL REVIEW: Show enhanced review modal
+              // Don't update plan yet - wait for user approval
+              // Don't clear active phase - needed for review modal
+
+              // Transform phase files into FileDiff format for EnhancedPhaseReview
+              const fileDiffs = data.files.map((file: any) => ({
+                path: file.path,
+                action: 'CREATE' as const,
+                changes: [] // Empty for new files created during phase
+              }));
+
+              // Set up pendingDiff so EnhancedPhaseReview can render
+              setPendingDiff({
+                id: Date.now().toString(),
+                summary: data.description || `Phase ${completedPhase.phaseNumber}: ${completedPhase.name} - Ready for Review`,
+                files: fileDiffs,
+                timestamp: new Date().toISOString()
+              });
+
+              // Trigger the review modal
+              setShowDiffPreview(true);
+
+              // Note: Next phase messages will be shown after user approves in approveDiff handler
+            }
+            // Check if this was a phased build completion (legacy newAppStagePlan)
+            else if (newAppStagePlan) {
               const currentPhaseNum = newAppStagePlan.currentPhase;
               const updatedPlan = {
                 ...newAppStagePlan,
-                phases: newAppStagePlan.phases.map(p => 
+                phases: newAppStagePlan.phases.map(p =>
                   p.number === currentPhaseNum ? { ...p, status: 'complete' as const } : p
                 )
               };
               setNewAppStagePlan(updatedPlan);
-              
+
               // Check if there are more phases
               const nextPhase = updatedPlan.phases.find(p => p.status === 'pending');
               if (nextPhase) {
@@ -1512,7 +1644,88 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
   };
 
   const approveDiff = async () => {
-    if (!pendingDiff || !currentComponent) return;
+    if (!pendingDiff) return;
+
+    // Check if this is a phase approval (new app build, not modification)
+    if (activePhase && implementationPlan) {
+      // Calculate actual hours if we have start time
+      const actualHours = phaseStartTimeRef.current
+        ? (Date.now() - phaseStartTimeRef.current) / (1000 * 60 * 60)
+        : undefined;
+
+      // Extract created files from the approved diff
+      const createdFiles = pendingDiff.files.map(f => f.path);
+
+      // Capture phase before clearing
+      const completedPhase = activePhase;
+
+      // Update the plan with completed phase
+      const updatedPlan: ImplementationPlan = {
+        ...implementationPlan,
+        phases: implementationPlan.phases.map(p =>
+          p.id === activePhase.id
+            ? {
+                ...p,
+                status: 'completed' as const,
+                result: {
+                  code: '', // Phase doesn't have component code, just files
+                  componentName: implementationPlan.concept.name,
+                  completedAt: new Date().toISOString(),
+                  actualHours,
+                  filesCreated: createdFiles,
+                },
+              }
+            : p
+        ),
+      };
+      setImplementationPlan(updatedPlan);
+
+      // Clear active phase
+      setActivePhase(null);
+      phaseStartTimeRef.current = null;
+
+      // Close the review modal
+      setPendingDiff(null);
+      setShowDiffPreview(false);
+
+      // Check for next phase
+      const nextPhase = updatedPlan.phases.find(p => p.status === 'pending');
+
+      if (nextPhase) {
+        setTimeout(() => {
+          const nextPhaseMessage: ChatMessage = {
+            id: (Date.now() + 10).toString(),
+            role: 'assistant',
+            content: `✅ **Phase ${completedPhase.phaseNumber}: ${completedPhase.name} - Approved!**\n\n` +
+              `Files created:\n${createdFiles.map(f => `  • ${f}`).join('\n')}\n\n` +
+              `---\n\n` +
+              `**Ready for Phase ${nextPhase.phaseNumber}: ${nextPhase.name}**\n\n` +
+              `${nextPhase.description}\n\n` +
+              `Return to the **Guided Build** tab to start the next phase, or continue chatting to refine the current implementation.`,
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, nextPhaseMessage]);
+        }, 500);
+      } else {
+        setTimeout(() => {
+          const completionMessage: ChatMessage = {
+            id: (Date.now() + 10).toString(),
+            role: 'assistant',
+            content: `🎉 **All ${updatedPlan.phases.length} Phases Complete!**\n\n` +
+              `Your **${updatedPlan.concept.name}** app is fully built according to the implementation plan!\n\n` +
+              `Total files created: ${updatedPlan.phases.flatMap(p => p.result?.filesCreated || []).length}\n\n` +
+              `Test it out and let me know if you'd like any adjustments!`,
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, completionMessage]);
+        }, 500);
+      }
+
+      return; // Exit early - phase approval complete
+    }
+
+    // Regular component modification approval (existing logic)
+    if (!currentComponent) return;
 
     try {
       // Parse current app to get files
@@ -1629,14 +1842,38 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
   };
 
   const rejectDiff = () => {
-    const rejectionMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content: `❌ Changes rejected. Your app remains unchanged. Feel free to request different modifications!`,
-      timestamp: new Date().toISOString()
-    };
+    // Check if this is a phase rejection
+    if (activePhase && implementationPlan) {
+      const rejectedPhase = activePhase;
 
-    setChatMessages(prev => [...prev, rejectionMessage]);
+      // Clear active phase
+      setActivePhase(null);
+      phaseStartTimeRef.current = null;
+
+      const rejectionMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ **Phase ${rejectedPhase.phaseNumber}: ${rejectedPhase.name} - Rejected**\n\n` +
+          `The implementation has been rejected. You can:\n\n` +
+          `• **Request Changes**: Use the "Request Changes" button to specify what needs to be different\n` +
+          `• **Retry**: Return to the **Guided Build** tab and start the phase again\n` +
+          `• **Skip**: Move on to other work and come back to this phase later`,
+        timestamp: new Date().toISOString()
+      };
+
+      setChatMessages(prev => [...prev, rejectionMessage]);
+    } else {
+      // Regular component modification rejection
+      const rejectionMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Changes rejected. Your app remains unchanged. Feel free to request different modifications!`,
+        timestamp: new Date().toISOString()
+      };
+
+      setChatMessages(prev => [...prev, rejectionMessage]);
+    }
+
     setPendingDiff(null);
     setShowDiffPreview(false);
     setActiveTab('chat');
@@ -2269,8 +2506,25 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
     setChatMessages([systemMessage]);
   };
 
-  // Handle phase start
+  // Handle phase start (with optional preview)
   const handlePhaseStart = async (phase: BuildPhase) => {
+    // Check if user wants to see phase preview first
+    if (settings.review.showPhasePreview) {
+      setPhaseToPreview(phase);
+      setShowPhasePreview(true);
+      return; // Wait for user to click "Start Building" in preview
+    }
+
+    // Otherwise, start building immediately
+    startPhaseBuild(phase);
+  };
+
+  // Actually start building a phase
+  const startPhaseBuild = async (phase: BuildPhase) => {
+    // Track this phase as active
+    setActivePhase(phase);
+    phaseStartTimeRef.current = Date.now();
+
     // Update plan to mark phase as in-progress
     if (implementationPlan) {
       const updatedPlan = {
@@ -2280,26 +2534,76 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
         ),
       };
       setImplementationPlan(updatedPlan);
-    }
 
-    // Add phase message to chat
-    const phaseMessage: ChatMessage = {
-      id: `phase-${Date.now()}`,
+      // Generate enhanced prompt with full phase context
+      const completedPhases = updatedPlan.phases.filter(p => p.status === 'completed');
+      const enhancedPrompt = generatePhasePrompt({
+        phase,
+        plan: updatedPlan,
+        previousPhases: completedPhases,
+        completedFiles: completedPhases.flatMap(p => p.result?.filesCreated || []),
+      });
+
+      // Add phase message to chat with enhanced prompt
+      const phaseMessage: ChatMessage = {
+        id: `phase-${Date.now()}`,
+        role: 'user',
+        content: enhancedPrompt,
+        timestamp: new Date().toISOString(),
+      };
+      setChatMessages(prev => [...prev, phaseMessage]);
+
+      // Set the enhanced prompt as user input and trigger auto-send
+      autoSendMessageRef.current = true;
+      setUserInput(enhancedPrompt);
+    }
+  };
+
+  // Handle "Request Changes" from enhanced review
+  const handleRequestChanges = (feedback: string) => {
+    if (!activePhase) return;
+
+    // Add user feedback to chat
+    const feedbackMessage: ChatMessage = {
+      id: Date.now().toString(),
       role: 'user',
-      content: phase.prompt,
+      content: `Please make the following changes to Phase ${activePhase.phaseNumber} (${activePhase.name}):\n\n${feedback}`,
       timestamp: new Date().toISOString(),
     };
-    setChatMessages(prev => [...prev, phaseMessage]);
+    setChatMessages(prev => [...prev, feedbackMessage]);
 
-    // Set the phase prompt as user input and trigger auto-send
-    // Using ref to trigger useEffect for reliable state-based sending
+    // Close diff preview
+    setShowDiffPreview(false);
+
+    // Send feedback to AI (will regenerate phase)
+    setUserInput(feedbackMessage.content);
     autoSendMessageRef.current = true;
-    setUserInput(phase.prompt);
+  };
+
+  // Handle "Ask Question" from enhanced review
+  const handleAskQuestion = (question: string) => {
+    if (!activePhase) return;
+
+    // Add question to chat
+    const questionMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `Question about Phase ${activePhase.phaseNumber}: ${question}`,
+      timestamp: new Date().toISOString(),
+    };
+    setChatMessages(prev => [...prev, questionMessage]);
+
+    // Don't close diff preview - user is just asking, not changing
+    // Send question to AI
+    setUserInput(questionMessage.content);
   };
 
   // Handle guided build mode exit
   const handleExitGuidedMode = () => {
     setGuidedBuildMode(false);
+    // Clear active phase tracking to prevent stale state
+    setActivePhase(null);
+    phaseStartTimeRef.current = null;
     // Keep the plan in case they want to resume
   };
 
@@ -2332,31 +2636,31 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="border-b border-white/[0.06] bg-neutral-925/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-3">
+        <div className="max-w-7xl mx-auto px-4 py-2.5">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm">
-                <span className="text-base">✨</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
+                <span className="text-sm">✨</span>
               </div>
               <div>
-                <h1 className="text-base font-semibold text-neutral-50 tracking-tight">AI App Builder</h1>
-                <p className="text-xs text-neutral-500">Build apps through conversation</p>
+                <h1 className="text-sm font-semibold text-neutral-50 tracking-tight">AI App Builder</h1>
+                <p className="text-2xs text-neutral-600">Build apps through conversation</p>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {/* App Concept Wizard Button */}
               <button
-                onClick={() => setShowConceptWizard(true)}
-                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium transition-colors"
+                onClick={() => setShowQuickStart(true)}
+                className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary-600 hover:bg-primary-700 text-white text-2xs font-medium transition-smooth"
                 title="Plan your app with guided wizard"
               >
-                <span>🎯</span>
+                <span className="text-xs">🎯</span>
                 <span>Plan App</span>
               </button>
 
@@ -2364,10 +2668,10 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               {implementationPlan && !guidedBuildMode && (
                 <button
                   onClick={() => setGuidedBuildMode(true)}
-                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-accent-success hover:bg-accent-success/90 text-white text-xs font-medium transition-colors"
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent-success hover:bg-accent-success/90 text-white text-2xs font-medium transition-smooth"
                   title="Resume implementation plan"
                 >
-                  <span>▶️</span>
+                  <span className="text-xs">▶️</span>
                   <span>Resume Plan</span>
                 </button>
               )}
@@ -2376,10 +2680,10 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               <div className="hidden md:flex items-center gap-0.5 bg-neutral-900 rounded-md p-0.5 border border-white/[0.06]">
                 <button
                   onClick={() => handleLayoutChange('classic')}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-2xs transition-smooth ${
                     layoutMode === 'classic'
                       ? 'bg-primary-600 text-white'
-                      : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+                      : 'text-neutral-600 hover:text-neutral-400 hover:bg-white/[0.03]'
                   }`}
                   title="Classic (50/50 split)"
                 >
@@ -2387,10 +2691,10 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </button>
                 <button
                   onClick={() => handleLayoutChange('preview-first')}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-2xs transition-smooth ${
                     layoutMode === 'preview-first'
                       ? 'bg-primary-600 text-white'
-                      : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+                      : 'text-neutral-600 hover:text-neutral-400 hover:bg-white/[0.03]'
                   }`}
                   title="Preview First (70/30 split)"
                 >
@@ -2398,10 +2702,10 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </button>
                 <button
                   onClick={() => handleLayoutChange('code-first')}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-2xs transition-smooth ${
                     layoutMode === 'code-first'
                       ? 'bg-primary-600 text-white'
-                      : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+                      : 'text-neutral-600 hover:text-neutral-400 hover:bg-white/[0.03]'
                   }`}
                   title="Code First (30/70 split)"
                 >
@@ -2409,10 +2713,10 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
                 </button>
                 <button
                   onClick={() => handleLayoutChange('stacked')}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-2xs transition-smooth ${
                     layoutMode === 'stacked'
                       ? 'bg-primary-600 text-white'
-                      : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
+                      : 'text-neutral-600 hover:text-neutral-400 hover:bg-white/[0.03]'
                   }`}
                   title="Stacked (vertical)"
                 >
@@ -2551,7 +2855,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               layoutMode === 'stacked' ? 50
                 : layoutMode === 'preview-first' ? 25
                 : layoutMode === 'code-first' ? 70
-                : 42
+                : 30
             }
             minSize={20}
             maxSize={80}
@@ -2770,7 +3074,7 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
               layoutMode === 'stacked' ? 50
                 : layoutMode === 'preview-first' ? 75
                 : layoutMode === 'code-first' ? 30
-                : 58
+                : 70
             }
             minSize={20}
             maxSize={80}
@@ -3416,49 +3720,37 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
         </div>
       )}
 
-      {/* Diff Preview Modal */}
-      {showDiffPreview && pendingDiff && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4"
-          onClick={() => {}}
-        >
-          <div
-            className="bg-slate-900 rounded-2xl border border-blue-500/30 max-w-4xl w-full max-h-[85vh] overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-6 py-5 border-b border-blue-500/30 bg-blue-500/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                    <span className="text-3xl">🔍</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Review Changes</h3>
-                    <p className="text-sm text-blue-200/80">Smart targeted modifications</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setPendingDiff(null);
-                    setShowDiffPreview(false);
-                  }}
-                  className="p-2 rounded-lg hover:bg-white/10 transition-all"
-                >
-                  <span className="text-slate-400 text-xl">✕</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 overflow-y-auto max-h-[70vh]">
-              <DiffPreview
-                summary={pendingDiff.summary}
-                files={pendingDiff.files}
-                onApprove={approveDiff}
-                onReject={rejectDiff}
-              />
-            </div>
-          </div>
-        </div>
+      {/* Enhanced Phase Review Modal */}
+      {showDiffPreview && pendingDiff && activePhase && (
+        <EnhancedPhaseReview
+          phase={activePhase}
+          files={pendingDiff.files}
+          summary={pendingDiff.summary}
+          onApprove={approveDiff}
+          onReject={rejectDiff}
+          onRequestChanges={handleRequestChanges}
+          onAskQuestion={handleAskQuestion}
+        />
+      )}
+
+      {/* Phase Preview Modal (shown before building) */}
+      {showPhasePreview && phaseToPreview && (
+        <PhasePreview
+          phase={phaseToPreview}
+          onStart={() => {
+            setShowPhasePreview(false);
+            startPhaseBuild(phaseToPreview);
+          }}
+          onCancel={() => {
+            setShowPhasePreview(false);
+            setPhaseToPreview(null);
+          }}
+          onCustomize={() => {
+            // TODO: Open phase editor to customize
+            setShowPhasePreview(false);
+            alert('Phase customization feature coming soon!');
+          }}
+        />
       )}
 
       {/* Architecture Template Selector Modal */}
@@ -3786,11 +4078,32 @@ I'll now show you the changes for Stage ${stagePlan.currentStage}. Review and ap
         </div>
       )}
 
+      {/* Quick Start Template Selector */}
+      {showQuickStart && (
+        <QuickStartSelector
+          isOpen={showQuickStart}
+          onClose={() => setShowQuickStart(false)}
+          onSelect={(template) => {
+            setSelectedQuickStartTemplate(template);
+            setShowQuickStart(false);
+            setShowConceptWizard(true);
+          }}
+          onSkip={() => {
+            setSelectedQuickStartTemplate(null);
+            setShowQuickStart(false);
+            setShowConceptWizard(true);
+          }}
+        />
+      )}
+
       {/* App Concept Wizard Modal - Now using Conversational version */}
       {showConceptWizard && (
         <ConversationalAppWizard
           onComplete={handleConceptComplete}
-          onCancel={() => setShowConceptWizard(false)}
+          onCancel={() => {
+            setShowConceptWizard(false);
+            setSelectedQuickStartTemplate(null);
+          }}
         />
       )}
 

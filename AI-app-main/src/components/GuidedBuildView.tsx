@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { ImplementationPlan, BuildPhase } from '../types/appConcept';
 import { calculateProgress } from '../utils/planGenerator';
+import PhaseEditor, { type Phase } from './PhaseEditor';
+import ProgressAnalytics from './ProgressAnalytics';
+import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
+import { useKeyboardShortcuts, type KeyboardShortcut } from '../hooks/useKeyboardShortcuts';
+import { Edit3, BarChart3 } from 'lucide-react';
 
 interface GuidedBuildViewProps {
   plan: ImplementationPlan;
@@ -13,7 +18,51 @@ interface GuidedBuildViewProps {
 
 export default function GuidedBuildView({ plan, onPhaseStart, onUpdatePlan, onExit }: GuidedBuildViewProps) {
   const [showAllPhases, setShowAllPhases] = useState(false);
+  const [showPhaseEditor, setShowPhaseEditor] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const progress = calculateProgress(plan);
+
+  // Calculate time estimates
+  const getPhaseEstimatedHours = (phase: BuildPhase): number => {
+    return phase.estimatedComplexity === 'simple' ? 4 :
+           phase.estimatedComplexity === 'moderate' ? 8 : 16;
+  };
+
+  const totalEstimatedHours = plan.phases.reduce((sum, phase) => sum + getPhaseEstimatedHours(phase), 0);
+  const completedHours = plan.phases
+    .filter(p => p.status === 'completed')
+    .reduce((sum, phase) => sum + getPhaseEstimatedHours(phase), 0);
+  const remainingHours = totalEstimatedHours - completedHours;
+
+  // Convert BuildPhase to Phase for editor
+  const convertToPhase = (buildPhase: BuildPhase): Phase => ({
+    number: buildPhase.phaseNumber,
+    name: buildPhase.name,
+    description: buildPhase.description,
+    objectives: buildPhase.objectives,
+    files: buildPhase.features, // Using features as files for now
+    isCustom: false, // Mark all as template phases (can enhance later)
+    notes: buildPhase.notes || '',
+    completed: buildPhase.status === 'completed',
+    estimatedHours: buildPhase.estimatedHours || (buildPhase.estimatedComplexity === 'simple' ? 4 : buildPhase.estimatedComplexity === 'moderate' ? 8 : 16),
+  });
+
+  // Convert Phase back to BuildPhase
+  const convertToBuildPhase = (phase: Phase, originalPhase: BuildPhase): BuildPhase => ({
+    ...originalPhase,
+    phaseNumber: phase.number,
+    name: phase.name,
+    description: phase.description,
+    objectives: phase.objectives || [],
+    features: phase.files, // Convert files back to features
+    estimatedComplexity:
+      (phase.estimatedHours || 8) <= 4 ? 'simple' :
+      (phase.estimatedHours || 8) <= 8 ? 'moderate' : 'complex',
+    estimatedHours: phase.estimatedHours,
+    notes: phase.notes || undefined,
+    status: phase.completed ? 'completed' : originalPhase.status,
+  });
 
   const markPhaseComplete = (phaseId: string) => {
     const updatedPlan = {
@@ -34,6 +83,96 @@ export default function GuidedBuildView({ plan, onPhaseStart, onUpdatePlan, onEx
     };
     onUpdatePlan(updatedPlan);
   };
+
+  // Handle phase editor save
+  const handleSavePhases = (editedPhases: Phase[]) => {
+    const updatedPhases = editedPhases.map((phase, index) => {
+      const originalPhase = plan.phases[index];
+      return convertToBuildPhase(phase, originalPhase);
+    });
+
+    const updatedPlan = {
+      ...plan,
+      phases: updatedPhases,
+    };
+
+    onUpdatePlan(updatedPlan);
+    setShowPhaseEditor(false);
+  };
+
+  // Define keyboard shortcuts
+  const shortcuts = useMemo<KeyboardShortcut[]>(() => [
+    {
+      key: '?',
+      description: 'Show keyboard shortcuts',
+      category: 'General',
+      action: () => setShowShortcutsHelp(true),
+    },
+    {
+      key: 'Escape',
+      description: 'Close modal/dialog',
+      category: 'General',
+      action: () => {
+        if (showShortcutsHelp) setShowShortcutsHelp(false);
+        else if (showAnalytics) setShowAnalytics(false);
+        else if (showPhaseEditor) setShowPhaseEditor(false);
+      },
+      enabled: showShortcutsHelp || showAnalytics || showPhaseEditor,
+    },
+    {
+      key: 'e',
+      ctrl: true,
+      description: 'Edit phases',
+      category: 'Actions',
+      action: () => setShowPhaseEditor(true),
+      enabled: !showPhaseEditor && !showAnalytics && !showShortcutsHelp,
+    },
+    {
+      key: 'a',
+      ctrl: true,
+      description: 'View analytics',
+      category: 'Actions',
+      action: () => setShowAnalytics(true),
+      enabled: !showPhaseEditor && !showAnalytics && !showShortcutsHelp,
+    },
+    {
+      key: 'd',
+      ctrl: true,
+      description: 'Toggle phase details',
+      category: 'View',
+      action: () => setShowAllPhases(!showAllPhases),
+      enabled: !showPhaseEditor && !showAnalytics && !showShortcutsHelp,
+    },
+    {
+      key: 'n',
+      description: 'Start next phase',
+      category: 'Navigation',
+      action: () => {
+        if (progress.nextPhase) {
+          onPhaseStart(progress.nextPhase);
+        }
+      },
+      enabled: !!progress.nextPhase && !showPhaseEditor && !showAnalytics && !showShortcutsHelp,
+    },
+    {
+      key: 'c',
+      description: 'Complete current phase',
+      category: 'Actions',
+      action: () => {
+        if (progress.currentPhase) {
+          markPhaseComplete(progress.currentPhase.id);
+        }
+      },
+      enabled: !!progress.currentPhase && !showPhaseEditor && !showAnalytics && !showShortcutsHelp,
+    },
+  ], [showShortcutsHelp, showAnalytics, showPhaseEditor, showAllPhases, progress.nextPhase, progress.currentPhase]);
+
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts({
+    shortcuts,
+    enabled: true,
+    preventDefault: true,
+  });
 
   const getPhaseIcon = (phase: BuildPhase) => {
     if (phase.status === 'completed') return '✅';
@@ -61,12 +200,28 @@ export default function GuidedBuildView({ plan, onPhaseStart, onUpdatePlan, onEx
             </h2>
             <p className="text-sm text-slate-400 mt-1">{plan.concept.description}</p>
           </div>
-          <button
-            onClick={onExit}
-            className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all text-sm"
-          >
-            Exit Guided Mode
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowAnalytics(true)}
+              className="px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 transition-all text-sm font-medium flex items-center gap-2"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Analytics
+            </button>
+            <button
+              onClick={() => setShowPhaseEditor(true)}
+              className="px-4 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 transition-all text-sm font-medium flex items-center gap-2"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit Phases
+            </button>
+            <button
+              onClick={onExit}
+              className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all text-sm"
+            >
+              Exit Guided Mode
+            </button>
+          </div>
         </div>
 
         {/* Progress */}
@@ -84,6 +239,37 @@ export default function GuidedBuildView({ plan, onPhaseStart, onUpdatePlan, onEx
           <div className="flex items-center justify-between text-xs text-slate-400 mt-1">
             <span>{progress.completed} of {progress.total} phases completed</span>
             {progress.nextPhase && <span>Next: {progress.nextPhase.name}</span>}
+          </div>
+
+          {/* Time Estimates */}
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+              <div className="text-xs text-slate-400 mb-1">Total Time</div>
+              <div className="text-lg font-semibold text-white">
+                {totalEstimatedHours}h
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                ~{Math.ceil(totalEstimatedHours / 8)} days
+              </div>
+            </div>
+            <div className="bg-green-600/10 rounded-lg p-3 border border-green-500/30">
+              <div className="text-xs text-green-400 mb-1">Completed</div>
+              <div className="text-lg font-semibold text-green-300">
+                {completedHours}h
+              </div>
+              <div className="text-xs text-green-500/70 mt-0.5">
+                {totalEstimatedHours > 0 ? Math.round((completedHours / totalEstimatedHours) * 100) : 0}% done
+              </div>
+            </div>
+            <div className="bg-purple-600/10 rounded-lg p-3 border border-purple-500/30">
+              <div className="text-xs text-purple-400 mb-1">Remaining</div>
+              <div className="text-lg font-semibold text-purple-300">
+                {remainingHours}h
+              </div>
+              <div className="text-xs text-purple-500/70 mt-0.5">
+                ~{Math.ceil(remainingHours / 8)} days left
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -230,6 +416,9 @@ export default function GuidedBuildView({ plan, onPhaseStart, onUpdatePlan, onEx
                     }`}>
                       {phase.estimatedComplexity}
                     </span>
+                    <div className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded text-center">
+                      ~{getPhaseEstimatedHours(phase)}h
+                    </div>
                   </div>
                 </div>
               </div>
@@ -253,6 +442,29 @@ export default function GuidedBuildView({ plan, onPhaseStart, onUpdatePlan, onEx
           </div>
         )}
       </div>
+
+      {/* Phase Editor Modal */}
+      <PhaseEditor
+        isOpen={showPhaseEditor}
+        onClose={() => setShowPhaseEditor(false)}
+        phases={plan.phases.map(convertToPhase)}
+        onSave={handleSavePhases}
+      />
+
+      {/* Progress Analytics Modal */}
+      <ProgressAnalytics
+        isOpen={showAnalytics}
+        onClose={() => setShowAnalytics(false)}
+        plan={plan}
+      />
+
+      {/* Keyboard Shortcuts Help */}
+      <KeyboardShortcutsHelp
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+        shortcuts={shortcuts}
+        appName={plan.concept.name}
+      />
     </div>
   );
 }

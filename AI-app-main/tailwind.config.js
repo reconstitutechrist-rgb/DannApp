@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: [
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
@@ -11,17 +11,17 @@ module.exports = {
       colors: {
         // Refined Futuristic Palette
         'primary': {
-          50: '#ecfeff',
-          100: '#cffafe',
-          200: '#a5f3fc',
-          300: '#67e8f9',
-          400: '#22d3ee',
-          500: '#06b6d4',
-          600: '#0891b2',
-          700: '#0e7490',
-          800: '#155e75',
-          900: '#164e63',
-          950: '#083344',
+          50: '#e6fffa',
+          100: '#b3fff0',
+          200: '#80ffe6',
+          300: '#4dffdd',
+          400: '#1affd3',
+          500: '#00ffcc',
+          600: '#00cca3',
+          700: '#00997a',
+          800: '#006651',
+          900: '#003329',
+          950: '#001a14',
         },
         'neutral': {
           50: '#fafafa',
@@ -39,13 +39,15 @@ module.exports = {
           950: '#0a0a0b',
         },
         'accent': {
-          cyan: '#06b6d4',
-          violet: '#8b5cf6',
-          blue: '#3b82f6',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#ef4444',
-          info: '#06b6d4',
+          cyan: '#00ffcc',
+          violet: '#aa00ff',
+          blue: '#0099ff',
+          success: '#00ff88',
+          warning: '#ffaa00',
+          error: '#ff0066',
+          info: '#00ffcc',
+          neon: '#00ffcc',
+          purple: '#aa00ff',
         }
       },
       fontFamily: {
@@ -68,10 +70,11 @@ module.exports = {
         'lg': '0 8px 16px rgba(0, 0, 0, 0.35)',
         'xl': '0 12px 24px rgba(0, 0, 0, 0.4)',
         '2xl': '0 16px 32px rgba(0, 0, 0, 0.45)',
-        // Glow effects - very subtle
-        'glow-xs': '0 0 10px rgba(6, 182, 212, 0.05)',
-        'glow-sm': '0 0 20px rgba(6, 182, 212, 0.1)',
-        'glow-md': '0 0 30px rgba(6, 182, 212, 0.15)',
+        // NEON Glow effects
+        'glow-xs': '0 0 10px rgba(0, 255, 200, 0.3)',
+        'glow-sm': '0 0 20px rgba(0, 255, 200, 0.5)',
+        'glow-md': '0 0 30px rgba(0, 255, 200, 0.7)',
+        'glow-neon': '0 0 40px rgba(170, 0, 255, 0.6)',
         // Inner shadows for depth
         'inner-sm': 'inset 0 1px 2px rgba(0, 0, 0, 0.3)',
         'inner-md': 'inset 0 2px 4px rgba(0, 0, 0, 0.4)',

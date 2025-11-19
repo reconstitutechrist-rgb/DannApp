@@ -14,7 +14,16 @@
       "Bash(git pull:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(Get-Process -Name node -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Id, ProcessName, StartTime)",
+      "Bash(kill:*)",
+      "Bash(npm run)",
+      "Bash(taskkill /F /PID 32492)",
+      "Bash(taskkill //F //PID 32492)",
+      "Bash(taskkill //F //PID 40944)",
+      "Bash(lsof:*)",
+      "Bash(pgrep:*)"
     ],
     "deny": [],
     "ask": []

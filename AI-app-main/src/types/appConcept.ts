@@ -79,10 +79,14 @@ export interface BuildPhase {
   features: string[]; // Feature IDs this phase implements
   estimatedComplexity: 'simple' | 'moderate' | 'complex';
   status: 'pending' | 'in-progress' | 'completed' | 'skipped';
+  notes?: string; // Developer notes and implementation details
+  estimatedHours?: number; // Time estimate for this phase
   result?: {
     code?: string;
     componentName?: string;
     completedAt?: string;
+    actualHours?: number; // Track actual time spent
+    filesCreated?: string[]; // Track files created in this phase
   };
 }
 
