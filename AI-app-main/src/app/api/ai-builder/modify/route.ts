@@ -126,7 +126,7 @@ export async function POST(request: Request) {
   const perfTracker = new PerformanceTracker();
   
   try {
-    const { prompt, currentAppState, conversationHistory } = await request.json();
+    const { prompt, currentAppState, conversationHistory, correctionPrompt, attemptNumber } = await request.json();
     perfTracker.checkpoint('request_parsed');
     
     // Log request start after parsing body
@@ -237,9 +237,20 @@ ${JSON.stringify(currentAppState, null, 2)}`;
     }
 
     // Add current modification request WITH file contents
-    const enhancedPrompt = fileContentsSection 
-      ? `${fileContentsSection}\n\n🎯 **USER REQUEST:**\n${prompt}`
-      : prompt;
+    // On retry attempts (attemptNumber > 1), include correction prompt with file contents
+    let enhancedPrompt: string;
+    
+    if (attemptNumber && attemptNumber > 1 && correctionPrompt) {
+      // Retry attempt with correction guidance
+      enhancedPrompt = fileContentsSection 
+        ? `${fileContentsSection}\n\n🔄 **RETRY ATTEMPT #${attemptNumber}** - Previous attempt had issues:\n${correctionPrompt}\n\n🎯 **ORIGINAL REQUEST:**\n${prompt}`
+        : `🔄 **RETRY ATTEMPT #${attemptNumber}** - Previous attempt had issues:\n${correctionPrompt}\n\n🎯 **ORIGINAL REQUEST:**\n${prompt}`;
+    } else {
+      // First attempt - normal prompt
+      enhancedPrompt = fileContentsSection 
+        ? `${fileContentsSection}\n\n🎯 **USER REQUEST:**\n${prompt}`
+        : prompt;
+    }
     
     messages.push({ role: 'user', content: enhancedPrompt });
 
