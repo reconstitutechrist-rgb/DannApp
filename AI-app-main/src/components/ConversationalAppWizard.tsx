@@ -5,6 +5,7 @@ import type { AppConcept, Feature, UIPreferences, TechnicalRequirements } from '
 import { ExamplePrompts, getRandomPlaceholder } from './ExamplePrompts';
 import { createAutoSaver, WIZARD_DRAFT_KEYS, formatDraftAge } from '../utils/wizardAutoSave';
 import { useToast } from './Toast';
+import LayoutPreview from './LayoutPreview';
 
 interface ConversationalAppWizardProps {
   onComplete: (concept: AppConcept) => void;
@@ -17,6 +18,7 @@ interface Message {
   content: string;
   suggestions?: string[];
   quickActions?: { label: string; value: string; icon?: string }[];
+  attachments?: string[]; // Base64 images
   timestamp: Date;
 }
 
@@ -37,7 +39,13 @@ export default function ConversationalAppWizard({ onComplete, onCancel }: Conver
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [placeholder, setPlaceholder] = useState(getRandomPlaceholder());
+
+  // UI State
+  const [activeTab, setActiveTab] = useState<'summary' | 'preview'>('summary');
+  const [previewKey, setPreviewKey] = useState(0); // To force re-render of preview animation
+  const [selectedElement, setSelectedElement] = useState<string | null>(null);
 
   const [wizardState, setWizardState] = useState<WizardState>({
     name: '',
@@ -49,6 +57,7 @@ export default function ConversationalAppWizard({ onComplete, onCancel }: Conver
       style: 'modern',
       colorScheme: 'auto',
       layout: 'single-page',
+      referenceMedia: []
     },
     technical: {
       needsAuth: false,
@@ -101,6 +110,11 @@ export default function ConversationalAppWizard({ onComplete, onCancel }: Conver
       });
     }
   }, [wizardState, messages, showDraftPrompt]);
+
+  // Update preview when UI prefs change
+  useEffect(() => {
+    setPreviewKey(prev => prev + 1);
+  }, [wizardState.uiPreferences]);
 
   // Load draft
   const loadDraft = () => {
@@ -163,6 +177,48 @@ What's your app idea?`,
     setIsTyping(true);
     await new Promise(resolve => setTimeout(resolve, duration));
     setIsTyping(false);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      
+      // Add to wizard state
+      setWizardState(prev => ({
+        ...prev,
+        uiPreferences: {
+          ...prev.uiPreferences,
+          referenceMedia: [
+            ...(prev.uiPreferences.referenceMedia || []),
+            {
+              type: file.type.startsWith('video') ? 'video' : 'image',
+              url: base64,
+              name: file.name
+            }
+          ]
+        }
+      }));
+
+      // Add user message with attachment
+      addMessage({
+        type: 'user',
+        content: `Uploaded reference: ${file.name}`,
+        attachments: [base64]
+      });
+
+      // Acknowledge upload
+      setTimeout(() => {
+        addMessage({
+          type: 'assistant',
+          content: `I've received your reference image. I'll use this to guide the design!`,
+        });
+      }, 500);
+    };
+    reader.readAsDataURL(file);
   };
 
   const analyzeUserInput = (input: string) => {
@@ -283,6 +339,11 @@ What's your app idea?`,
   const handleUserMessage = async (input: string) => {
     if (!input.trim()) return;
 
+    let contextInput = input;
+    if (selectedElement) {
+      contextInput = `[User selected ${selectedElement}] ${input}`;
+    }
+
     // Add user message
     addMessage({ type: 'user', content: input });
     setUserInput('');
@@ -293,7 +354,7 @@ What's your app idea?`,
 
     if (currentTopic === 'initial') {
       // First message - analyze the app idea
-      const analysis = analyzeUserInput(input);
+      const analysis = analyzeUserInput(contextInput);
 
       const newState = { ...wizardState };
 
@@ -349,7 +410,7 @@ What's your app idea?`,
 
     } else if (currentTopic === 'basic') {
       // Collecting basic info refinements
-      const lowerInput = input.toLowerCase();
+      const lowerInput = contextInput.toLowerCase();
 
       if (!wizardState.name && input.length < 50) {
         setWizardState(prev => ({ ...prev, name: input.trim() }));
@@ -366,13 +427,13 @@ What's your app idea?`,
       }
 
     } else if (currentTopic === 'features') {
-      await processFeatureInput(input);
+      await processFeatureInput(contextInput);
 
     } else if (currentTopic === 'ui') {
-      await processUIInput(input);
+      await processUIInput(contextInput);
 
     } else if (currentTopic === 'technical') {
-      await processTechnicalInput(input);
+      await processTechnicalInput(contextInput);
 
     } else if (currentTopic === 'review') {
       if (input.toLowerCase().includes('yes') || input.toLowerCase().includes('confirm') || input.toLowerCase().includes('done')) {
@@ -441,15 +502,17 @@ What's your app idea?`,
 
       setWizardState(prev => ({ ...prev, currentTopic: 'ui' }));
       setExpandedSections(prev => new Set([...prev, 'ui']));
+      setActiveTab('preview'); // Switch to preview mode
 
       addMessage({
         type: 'assistant',
-        content: `Excellent! You've defined **${wizardState.features.length} features**. Now let's talk about design.\n\nWhat style best fits your app and target audience?\n\n• **Modern** - Clean lines, subtle animations, contemporary feel\n• **Minimalist** - Simple, focused, distraction-free\n• **Playful** - Fun, colorful, engaging\n• **Professional** - Business-oriented, trustworthy, formal`,
+        content: `Excellent! You've defined **${wizardState.features.length} features**. Now let's talk about design.\n\nCheck out the **Preview** panel on the right! You can see your app take shape as we make decisions.\n\nWhat style best fits your app and target audience?\n\n• **Modern** - Clean lines, subtle animations, contemporary feel\n• **Minimalist** - Simple, focused, distraction-free\n• **Playful** - Fun, colorful, engaging\n• **Professional** - Business-oriented, trustworthy, formal\n\nYou can also upload reference images!`,
         quickActions: [
           { label: 'Modern ✨', value: 'style_modern', icon: '✨' },
           { label: 'Minimalist 🎯', value: 'style_minimalist', icon: '🎯' },
           { label: 'Playful 🎨', value: 'style_playful', icon: '🎨' },
           { label: 'Professional 💼', value: 'style_professional', icon: '💼' },
+          { label: 'Upload Reference 🖼️', value: 'upload_ref', icon: '🖼️' },
         ],
       });
       return;
@@ -551,6 +614,7 @@ What's your app idea?`,
     if (lowerInput.includes('done') || lowerInput.includes('continue') || lowerInput.includes('next')) {
       setWizardState(prev => ({ ...prev, currentTopic: 'technical' }));
       setExpandedSections(prev => new Set([...prev, 'technical']));
+      setActiveTab('summary'); // Switch back to summary for final review
 
       const techRecommendations: string[] = [];
 
@@ -594,6 +658,7 @@ What's your app idea?`,
           { label: 'Light ☀️', value: 'color_light', icon: '☀️' },
           { label: 'Dark 🌙', value: 'color_dark', icon: '🌙' },
           { label: 'Auto 🔄', value: 'color_auto', icon: '🔄' },
+          { label: 'Upload Reference 🖼️', value: 'upload_ref', icon: '🖼️' },
         ],
       });
     }
@@ -646,6 +711,11 @@ What's your app idea?`,
 
   const handleQuickAction = async (value: string) => {
     setUserInput('');
+
+    if (value === 'upload_ref') {
+      fileInputRef.current?.click();
+      return;
+    }
 
     if (value === 'add_suggested') {
       const analysis = analyzeUserInput(wizardState.description);
@@ -768,6 +838,15 @@ What's your app idea?`,
 
   return (
     <>
+      {/* File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*,video/*"
+        onChange={handleFileUpload}
+      />
+
       {/* Draft Resume Prompt */}
       {showDraftPrompt && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[101] flex items-center justify-center p-4">
@@ -868,6 +947,16 @@ What's your app idea?`,
                             return part;
                           })}
                         </div>
+                        {/* Attachments */}
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {message.attachments.map((attachment, i) => (
+                              <div key={i} className="relative w-32 h-32 rounded-lg overflow-hidden border border-white/20">
+                                <img src={attachment} alt="Attachment" className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {message.quickActions && (
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -903,6 +992,13 @@ What's your app idea?`,
               {/* Input */}
               <div className="p-4 border-t border-white/10">
                 <div className="flex gap-2">
+                   <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-400 hover:text-white transition-all"
+                    title="Upload Image"
+                  >
+                    🖼️
+                  </button>
                   <input
                     ref={inputRef}
                     type="text"
@@ -928,188 +1024,243 @@ What's your app idea?`,
               </div>
             </div>
 
-            {/* Right Panel - Summary */}
-            <div className="w-2/5 overflow-y-auto bg-slate-950/50 p-6">
-              <div className="sticky top-0 bg-slate-950/80 backdrop-blur-sm pb-4 mb-4 border-b border-white/10">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <span>📋</span>
-                  App Concept Summary
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">Updates in real-time as you provide information</p>
+            {/* Right Panel - Summary/Preview */}
+            <div className="w-2/5 flex flex-col bg-slate-950/50">
+              {/* Tabs */}
+              <div className="flex border-b border-white/10">
+                <button
+                  onClick={() => setActiveTab('summary')}
+                  className={`flex-1 py-3 text-sm font-medium transition-all ${
+                    activeTab === 'summary' ? 'bg-white/5 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Summary
+                </button>
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  className={`flex-1 py-3 text-sm font-medium transition-all ${
+                    activeTab === 'preview' ? 'bg-white/5 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Preview
+                </button>
               </div>
 
-              <div className="space-y-4">
-                {/* Basic Info */}
-                <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => toggleSection('basic')}
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>📱</span>
-                      <span className="font-medium text-white">Basic Information</span>
-                      {wizardState.name && (
-                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">✓</span>
-                      )}
-                    </div>
-                    <span className="text-slate-400">{expandedSections.has('basic') ? '▼' : '▶'}</span>
-                  </button>
-                  {expandedSections.has('basic') && (
-                    <div className="px-4 pb-4 space-y-3 border-t border-white/10 pt-3">
-                      <div>
-                        <label className="text-xs text-slate-400">App Name</label>
-                        <p className="text-white font-medium">{wizardState.name || <span className="text-slate-500 italic">Not set</span>}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400">Description</label>
-                        <p className="text-sm text-slate-300">{wizardState.description || <span className="text-slate-500 italic">Not set</span>}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400">Purpose</label>
-                        <p className="text-sm text-slate-300">{wizardState.purpose || <span className="text-slate-500 italic">Not set</span>}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400">Target Users</label>
-                        <p className="text-sm text-slate-300">{wizardState.targetUsers || <span className="text-slate-500 italic">Not set</span>}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Features */}
-                <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => toggleSection('features')}
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>✨</span>
-                      <span className="font-medium text-white">Features</span>
-                      <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">
-                        {wizardState.features.length}
-                      </span>
-                    </div>
-                    <span className="text-slate-400">{expandedSections.has('features') ? '▼' : '▶'}</span>
-                  </button>
-                  {expandedSections.has('features') && (
-                    <div className="px-4 pb-4 space-y-2 border-t border-white/10 pt-3">
-                      {wizardState.features.length === 0 ? (
-                        <p className="text-slate-500 italic text-sm">No features added yet</p>
-                      ) : (
-                        wizardState.features.map((feature, index) => (
-                          <div key={feature.id} className="bg-white/5 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-slate-400">{index + 1}.</span>
-                                <span className="font-medium text-white text-sm">{feature.name}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <select
-                                  value={feature.priority}
-                                  onChange={(e) => updateFeaturePriority(feature.id, e.target.value as any)}
-                                  className="text-xs bg-transparent border border-white/20 rounded px-1 py-0.5 text-slate-300"
-                                >
-                                  <option value="high">High</option>
-                                  <option value="medium">Medium</option>
-                                  <option value="low">Low</option>
-                                </select>
-                                <button
-                                  onClick={() => removeFeature(feature.id)}
-                                  className="text-red-400 hover:text-red-300 p-1"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            </div>
-                            <p className="text-xs text-slate-400">{feature.description}</p>
+              {activeTab === 'summary' ? (
+                <div className="flex-1 overflow-y-auto p-6">
+                   {/* Existing Summary Content */}
+                  <div className="space-y-4">
+                    {/* Basic Info */}
+                    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => toggleSection('basic')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>📱</span>
+                          <span className="font-medium text-white">Basic Information</span>
+                          {wizardState.name && (
+                            <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">✓</span>
+                          )}
+                        </div>
+                        <span className="text-slate-400">{expandedSections.has('basic') ? '▼' : '▶'}</span>
+                      </button>
+                      {expandedSections.has('basic') && (
+                        <div className="px-4 pb-4 space-y-3 border-t border-white/10 pt-3">
+                          <div>
+                            <label className="text-xs text-slate-400">App Name</label>
+                            <p className="text-white font-medium">{wizardState.name || <span className="text-slate-500 italic">Not set</span>}</p>
                           </div>
-                        ))
+                          <div>
+                            <label className="text-xs text-slate-400">Description</label>
+                            <p className="text-sm text-slate-300">{wizardState.description || <span className="text-slate-500 italic">Not set</span>}</p>
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-400">Purpose</label>
+                            <p className="text-sm text-slate-300">{wizardState.purpose || <span className="text-slate-500 italic">Not set</span>}</p>
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-400">Target Users</label>
+                            <p className="text-sm text-slate-300">{wizardState.targetUsers || <span className="text-slate-500 italic">Not set</span>}</p>
+                          </div>
+                        </div>
                       )}
                     </div>
+
+                    {/* Features */}
+                    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => toggleSection('features')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>✨</span>
+                          <span className="font-medium text-white">Features</span>
+                          <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">
+                            {wizardState.features.length}
+                          </span>
+                        </div>
+                        <span className="text-slate-400">{expandedSections.has('features') ? '▼' : '▶'}</span>
+                      </button>
+                      {expandedSections.has('features') && (
+                        <div className="px-4 pb-4 space-y-2 border-t border-white/10 pt-3">
+                          {wizardState.features.length === 0 ? (
+                            <p className="text-slate-500 italic text-sm">No features added yet</p>
+                          ) : (
+                            wizardState.features.map((feature, index) => (
+                              <div key={feature.id} className="bg-white/5 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-400">{index + 1}.</span>
+                                    <span className="font-medium text-white text-sm">{feature.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <select
+                                      value={feature.priority}
+                                      onChange={(e) => updateFeaturePriority(feature.id, e.target.value as any)}
+                                      className="text-xs bg-transparent border border-white/20 rounded px-1 py-0.5 text-slate-300"
+                                    >
+                                      <option value="high">High</option>
+                                      <option value="medium">Medium</option>
+                                      <option value="low">Low</option>
+                                    </select>
+                                    <button
+                                      onClick={() => removeFeature(feature.id)}
+                                      className="text-red-400 hover:text-red-300 p-1"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-slate-400">{feature.description}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* UI Preferences */}
+                    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => toggleSection('ui')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🎨</span>
+                          <span className="font-medium text-white">Design</span>
+                        </div>
+                        <span className="text-slate-400">{expandedSections.has('ui') ? '▼' : '▶'}</span>
+                      </button>
+                      {expandedSections.has('ui') && (
+                        <div className="px-4 pb-4 space-y-2 border-t border-white/10 pt-3">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <label className="text-xs text-slate-400">Style</label>
+                              <p className="text-white capitalize">{wizardState.uiPreferences.style}</p>
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-400">Theme</label>
+                              <p className="text-white capitalize">{wizardState.uiPreferences.colorScheme}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-xs text-slate-400">Layout</label>
+                              <p className="text-white capitalize">{wizardState.uiPreferences.layout.replace('-', ' ')}</p>
+                            </div>
+                            {/* Reference Media */}
+                            {wizardState.uiPreferences.referenceMedia && wizardState.uiPreferences.referenceMedia.length > 0 && (
+                              <div className="col-span-2 mt-2">
+                                <label className="text-xs text-slate-400">References</label>
+                                <div className="flex gap-2 mt-1 overflow-x-auto">
+                                  {wizardState.uiPreferences.referenceMedia.map((media, i) => (
+                                    <div key={i} className="w-12 h-12 rounded border border-white/20 overflow-hidden shrink-0">
+                                      <img src={media.url} className="w-full h-full object-cover" />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Technical */}
+                    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => toggleSection('technical')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>⚙️</span>
+                          <span className="font-medium text-white">Technical</span>
+                        </div>
+                        <span className="text-slate-400">{expandedSections.has('technical') ? '▼' : '▶'}</span>
+                      </button>
+                      {expandedSections.has('technical') && (
+                        <div className="px-4 pb-4 border-t border-white/10 pt-3">
+                          <div className="flex flex-wrap gap-2">
+                            {wizardState.technical.needsAuth && (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">🔐 Auth</span>
+                            )}
+                            {wizardState.technical.needsDatabase && (
+                              <span className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs">💾 Database</span>
+                            )}
+                            {wizardState.technical.needsAPI && (
+                              <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">🔌 API</span>
+                            )}
+                            {wizardState.technical.needsFileUpload && (
+                              <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded-full text-xs">📤 Files</span>
+                            )}
+                            {wizardState.technical.needsRealtime && (
+                              <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs">⚡ Realtime</span>
+                            )}
+                            {!Object.values(wizardState.technical).some(v => v === true) && (
+                              <span className="text-slate-500 italic text-sm">No requirements selected</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Complete Button */}
+                  {getCompletionPercentage() >= 50 && (
+                    <div className="mt-6 pt-4 border-t border-white/10">
+                      <button
+                        onClick={handleComplete}
+                        className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+                      >
+                        <span>🚀</span>
+                        <span>Generate Implementation Plan</span>
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                {/* UI Preferences */}
-                <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => toggleSection('ui')}
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>🎨</span>
-                      <span className="font-medium text-white">Design</span>
-                    </div>
-                    <span className="text-slate-400">{expandedSections.has('ui') ? '▼' : '▶'}</span>
-                  </button>
-                  {expandedSections.has('ui') && (
-                    <div className="px-4 pb-4 space-y-2 border-t border-white/10 pt-3">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <label className="text-xs text-slate-400">Style</label>
-                          <p className="text-white capitalize">{wizardState.uiPreferences.style}</p>
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-400">Theme</label>
-                          <p className="text-white capitalize">{wizardState.uiPreferences.colorScheme}</p>
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs text-slate-400">Layout</label>
-                          <p className="text-white capitalize">{wizardState.uiPreferences.layout.replace('-', ' ')}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Technical */}
-                <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => toggleSection('technical')}
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>⚙️</span>
-                      <span className="font-medium text-white">Technical</span>
-                    </div>
-                    <span className="text-slate-400">{expandedSections.has('technical') ? '▼' : '▶'}</span>
-                  </button>
-                  {expandedSections.has('technical') && (
-                    <div className="px-4 pb-4 border-t border-white/10 pt-3">
-                      <div className="flex flex-wrap gap-2">
-                        {wizardState.technical.needsAuth && (
-                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">🔐 Auth</span>
-                        )}
-                        {wizardState.technical.needsDatabase && (
-                          <span className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs">💾 Database</span>
-                        )}
-                        {wizardState.technical.needsAPI && (
-                          <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">🔌 API</span>
-                        )}
-                        {wizardState.technical.needsFileUpload && (
-                          <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded-full text-xs">📤 Files</span>
-                        )}
-                        {wizardState.technical.needsRealtime && (
-                          <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs">⚡ Realtime</span>
-                        )}
-                        {!Object.values(wizardState.technical).some(v => v === true) && (
-                          <span className="text-slate-500 italic text-sm">No requirements selected</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Complete Button */}
-              {getCompletionPercentage() >= 50 && (
-                <div className="mt-6 pt-4 border-t border-white/10">
-                  <button
-                    onClick={handleComplete}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
-                  >
-                    <span>🚀</span>
-                    <span>Generate Implementation Plan</span>
-                  </button>
+              ) : (
+                <div className="flex-1 overflow-hidden bg-slate-900 relative">
+                  <div className="absolute inset-0 p-4">
+                     <div className="h-full border border-white/10 rounded-2xl overflow-hidden">
+                        <LayoutPreview 
+                          key={previewKey} 
+                          preferences={wizardState.uiPreferences} 
+                          concept={{
+                            name: wizardState.name,
+                            description: wizardState.description,
+                            purpose: wizardState.purpose,
+                            coreFeatures: wizardState.features
+                          }}
+                          onPreferenceChange={(newPrefs) => {
+                            setWizardState(prev => ({
+                              ...prev,
+                              uiPreferences: { ...prev.uiPreferences, ...newPrefs }
+                            }));
+                          }}
+                          selectedElement={selectedElement}
+                          onElementSelect={setSelectedElement}
+                        />
+                     </div>
+                  </div>
                 </div>
               )}
             </div>

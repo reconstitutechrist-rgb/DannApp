@@ -7,7 +7,7 @@ const anthropic = new Anthropic({
 
 export async function POST(request: Request) {
   try {
-    const { prompt, conversationHistory, includeCodeInResponse = false, mode = 'ACT' } = await request.json();
+    const { prompt, conversationHistory, includeCodeInResponse = false, mode = 'ACT', images } = await request.json();
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({
@@ -97,7 +97,24 @@ You are NOT generating full apps in this mode - just having a helpful conversati
       });
     }
 
-    messages.push({ role: 'user', content: prompt });
+    // Build user message content
+    let userContent: any = prompt;
+
+    if (images && Array.isArray(images) && images.length > 0) {
+      userContent = [
+        { type: 'text', text: prompt },
+        ...images.map((img: string) => ({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: img.split(';')[0].split(':')[1] || 'image/jpeg',
+            data: img.split(',')[1] || img
+          }
+        }))
+      ];
+    }
+
+    messages.push({ role: 'user', content: userContent });
 
     console.log('Chat Q&A with Claude...');
 

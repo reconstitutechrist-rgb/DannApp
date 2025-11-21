@@ -2,7 +2,7 @@
 
 Build complete React and Next.js applications through natural conversation with Claude AI. No coding required - just describe what you want to build!
 
-![Version](https://img.shields.io/badge/version-2.0-blue)
+![Version](https://img.shields.io/badge/version-2.5-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204.5-purple)
 
@@ -15,6 +15,19 @@ Build complete React and Next.js applications through natural conversation with 
 - Natural language app generation
 - Iterative refinements through conversation
 - Q&A mode for programming questions
+
+### 🎯 **PLAN/ACT Dual Mode System**
+- **PLAN Mode**: Discussion and planning without code generation
+  - Design app architecture and requirements
+  - Create roadmaps and feature specifications
+  - Ask clarifying questions and explore ideas
+  - Perfect for initial planning phase
+- **ACT Mode**: Programming assistance and app generation
+  - Answer coding questions
+  - Generate complete apps
+  - Iterate and refine through conversation
+  - Apply modifications to existing code
+- **Toggle anytime**: Switch modes based on your needs
 
 ### 🏗️ **Full-Stack Support**
 - **Frontend-only apps**: Instant preview in browser
@@ -29,11 +42,12 @@ Build complete React and Next.js applications through natural conversation with 
 - Complex changes: Review and approve before applying
 - Staged modifications for big features
 
-### 📸 **Image-Inspired Designs**
-- Upload screenshots or designs
-- AI extracts colors, styles, and patterns
+### 📸 **Image-Inspired Designs with Layout Preview**
+- Upload screenshots, mockups, or design references
+- AI extracts colors, styles, patterns, and layout structure
+- Visual layout preview during wizard (mobile/tablet/desktop)
 - Recreates the aesthetic with Tailwind CSS
-- Perfect for replicating existing designs
+- Perfect for replicating existing designs or prototypes
 
 ### 🕒 **Advanced Version Control**
 - Automatic version saving on every change
@@ -94,31 +108,41 @@ SITE_PASSWORD=Nerd
 
 ## 💡 How to Use
 
-### 1. **Start a Conversation**
+### 1. **Choose Your Mode**
+- **PLAN Mode**: Design and plan your app without generating code
+- **ACT Mode**: Generate code and build your app
+- Toggle between modes anytime using the mode selector
+
+### 2. **Start a Conversation**
 Just describe what you want to build:
 - "Build a todo app with priorities"
 - "Create a blog with dark mode"
 - "Make a dashboard with charts"
 
-### 2. **Iterative Refinement**
+### 3. **Upload Design References (Optional)**
+- Upload screenshots or mockups for design inspiration
+- AI extracts colors, styles, and layout structure
+- See visual layout preview before building
+
+### 4. **Iterative Refinement**
 Continue the conversation to improve:
 - "Add a dark mode toggle"
 - "Make the buttons blue"
 - "Add export to CSV functionality"
 
-### 3. **Preview & Test**
+### 5. **Preview & Test**
 - Frontend apps: Instant live preview
 - Full-stack apps: Download and run locally
 - Fullscreen mode available
 - View/edit code in browser
 
-### 4. **Version Control**
+### 6. **Version Control**
 - **Ctrl+Z**: Undo last change
 - **Ctrl+Shift+Z**: Redo
 - Click **🕒 History** to see all versions
 - Fork to create alternative versions
 
-### 5. **Export & Deploy**
+### 7. **Export & Deploy**
 - Click **📦 Export** for deployment instructions
 - Download ZIP with complete project
 - Deploy to Vercel, Netlify, or anywhere
@@ -146,18 +170,26 @@ Continue the conversation to improve:
 ## 🛠️ Technology Stack
 
 ### Core
-- **AI**: Claude Sonnet 4.5 (Anthropic)
-- **Framework**: Next.js 13+ with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
+- **AI**: Claude Sonnet 4.5-20250929 (Anthropic)
+- **Framework**: Next.js 16.0.1 with App Router
+- **Runtime**: React 19.2.0
+- **Language**: TypeScript 5.2.2
+- **Styling**: Tailwind CSS 4.0.0
 
 ### Preview System
-- **Sandpack**: Browser-based React preview
+- **Sandpack**: Browser-based React preview (v2.20.0)
 - **Live Editing**: Real-time code updates
+- **Resizable Panels**: react-resizable-panels 3.0.0
+
+### Code Parsing & Modification
+- **AST Operations**: tree-sitter 0.25.0
+- **JavaScript/TypeScript**: tree-sitter-javascript, tree-sitter-typescript
+- **Surgical Edits**: Custom AST modifier for precise code changes
+- **Smart Diffs**: Only modifies what you request
 
 ### Full-Stack Capabilities
 - **Database**: Prisma ORM (PostgreSQL, MySQL, MongoDB, SQLite)
-- **Authentication**: NextAuth.js (OAuth, JWT)
+- **Authentication**: NextAuth.js (OAuth, JWT) + Supabase Auth
 - **File Upload**: Local storage or cloud (S3, Cloudinary)
 - **Real-time**: Pusher, Server-Sent Events
 - **Email**: Resend, Nodemailer
@@ -176,25 +208,73 @@ Continue the conversation to improve:
 
 ---
 
+## 🏗️ Architecture & Code Organization
+
+### Component Architecture
+The app is built with a clean, modular architecture:
+
+**Core Components:**
+- **AIBuilder.tsx** - Main orchestrator (refactored: 4131 → 581 lines)
+- **BuilderHeader.tsx** - Navigation, mode toggle, layout controls
+- **ChatPanel.tsx** - Conversation interface with PLAN/ACT toggle
+- **PreviewPanel.tsx** - Code/preview tabs with version controls
+- **LayoutPreview.tsx** - Visual layout mockups during planning
+
+**State Management Hooks:**
+- **useAIBuilderState.ts** - Centralized state with reducer pattern
+- **useChatSystem.ts** - Chat logic with conversation memory
+- **useBuilderSettings.ts** - Settings persistence with localStorage
+
+**Type Organization:**
+- **aiBuilderTypes.ts** - Builder state and UI types
+- **appConcept.ts** - App planning and phase types
+
+**Benefits:**
+- 85% reduction in main component complexity
+- Improved testability and maintainability
+- Better code organization and reusability
+- Cleaner separation of concerns
+
+---
+
 ## 🔑 Features in Detail
 
-### Dual Chat System
-The app intelligently routes your messages:
-- **Questions**: "What is useState?" → AI answers
-- **Build requests**: "Build a todo app" → AI generates
+### PLAN/ACT Dual Mode System
+The app offers two distinct conversation modes:
 
-### Modification System (Phase 2)
-Smart diff-based modifications:
-- **Simple changes**: Color, text, styling → Auto-applied
-- **Medium changes**: New features, dark mode → Auto-applied
+**PLAN Mode (Discussion & Planning):**
+- Design app architecture without generating code
+- Create roadmaps and feature specifications
+- Ask clarifying questions and explore ideas
+- Perfect for requirements gathering and planning
+
+**ACT Mode (Code Generation):**
+- Answer programming questions
+- Generate complete applications
+- Apply modifications to existing code
+- Iterate and refine through conversation
+
+**Smart Mode Detection:**
+- AI automatically understands context
+- Toggle manually anytime using the mode selector
+- Seamless switching between planning and building
+
+### Modification System with AST
+Smart diff-based modifications using Abstract Syntax Trees:
+- **Simple changes**: Color, text, styling → Auto-applied instantly
+- **Medium changes**: New features, dark mode → Auto-applied with preview
 - **Complex changes**: Auth, major refactors → Requires approval
+- **Surgical precision**: Only changes what you request, preserves everything else
+- **Enhanced phase review**: Side-by-side comparison of planned vs implemented phases
 
-### Image Upload
+### Image Upload with Layout Preview
 Upload any image and AI will:
-- Extract color palette
-- Identify design style
-- Recreate the aesthetic
-- Match fonts and layouts
+- Extract color palette and design tokens
+- Identify design style and patterns
+- Generate visual layout preview (mobile/tablet/desktop)
+- Recreate the aesthetic with Tailwind CSS
+- Match fonts, spacing, and component layouts
+- Perfect for replicating existing designs or prototypes
 
 ---
 
@@ -268,9 +348,17 @@ See [Deployment Guide](./DEPLOYMENT_GUIDE.md) for detailed instructions.
 - ✅ **Phase 2**: AST Modifier System (Complete)
 - ✅ **Phase 3**: AI Integration (Complete)
 - ✅ **Phase 5**: Authentication Support (Complete)
+- ✅ **Phase 6**: Enhanced Phase Review System (Complete)
+- 🔄 **Phase 7**: Component Architecture Refactoring (In Progress)
 - 📝 **Phase 4**: Skipped/Merged with Phase 3
 
-**Latest:** Phase 5 adds one-command authentication via AST operations!
+**Latest Updates:**
+- Enhanced phase review with side-by-side plan vs implementation comparison
+- Image upload support for design-based generation
+- PLAN/ACT dual-mode conversation system
+- Component refactoring for improved maintainability (AIBuilder.tsx: 4131 → 581 lines)
+- UI modernization with futuristic theme
+- Tailwind CSS v4 upgrade with modern features
 
 ---
 

@@ -37,6 +37,11 @@ export interface UIPreferences {
   primaryColor?: string;
   layout: 'single-page' | 'multi-page' | 'dashboard' | 'custom';
   inspiration?: string; // URL or description
+  referenceMedia?: {
+    type: 'image' | 'video';
+    url: string;
+    name: string;
+  }[];
 }
 
 export interface TechnicalRequirements {
