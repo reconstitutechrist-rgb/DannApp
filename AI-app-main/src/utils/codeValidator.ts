@@ -18,6 +18,8 @@ export interface ValidationError {
 export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
+  autoFixed?: boolean;
+  fixedCode?: string;
 }
 
 /**
@@ -349,11 +351,17 @@ export function hasUnclosedStrings(code: string): ValidationError[] {
 }
 
 /**
- * Main validation function - runs all validators
+ * Main validation function - runs all validators with optional auto-fix
+ * 
+ * @param code - The code to validate
+ * @param filePath - Path to the file (for context-specific validation)
+ * @param autoFix - Whether to attempt automatic fixes (default: false)
+ * @returns ValidationResult with errors and potentially fixed code
  */
 export function validateGeneratedCode(
   code: string,
-  filePath: string = 'src/App.tsx'
+  filePath: string = 'src/App.tsx',
+  autoFix: boolean = false
 ): ValidationResult {
   const allErrors: ValidationError[] = [];
   
@@ -363,63 +371,118 @@ export function validateGeneratedCode(
   allErrors.push(...hasTypeScriptInJSX(code, filePath));
   allErrors.push(...hasUnclosedStrings(code));
   
+  // If no errors, return valid result
+  if (allErrors.length === 0) {
+    return {
+      valid: true,
+      errors: []
+    };
+  }
+  
+  // If errors found and auto-fix is enabled, attempt to fix
+  if (autoFix) {
+    const fixedCode = attemptAutoFix(code, allErrors);
+    
+    // If we made changes, re-validate the fixed code
+    if (fixedCode !== code) {
+      const revalidation = validateGeneratedCode(fixedCode, filePath, false);
+      
+      // If fixed code is now valid, return success with fixed code
+      if (revalidation.valid) {
+        return {
+          valid: true,
+          errors: [],
+          autoFixed: true,
+          fixedCode: fixedCode
+        };
+      }
+      
+      // Fixed code still has errors, return partial fix
+      return {
+        valid: false,
+        errors: revalidation.errors,
+        autoFixed: true,
+        fixedCode: fixedCode
+      };
+    }
+  }
+  
+  // No fix attempted or no fix available
   return {
-    valid: allErrors.length === 0,
+    valid: false,
     errors: allErrors
   };
 }
 
 /**
- * Attempts to automatically fix common issues
+ * Attempts to automatically fix code issues
+ * 
+ * @param code - The code with errors
+ * @param errors - The validation errors to fix
+ * @returns Fixed code, or original code if no fixes applied
  */
-export function autoFixCode(code: string, errors: ValidationError[]): string {
+function attemptAutoFix(code: string, errors: ValidationError[]): string {
   let fixedCode = code;
   
-  // Sort errors by line number (descending) to avoid index shifting
-  const sortedErrors = [...errors].sort((a, b) => (b.line || 0) - (a.line || 0));
-  
-  for (const error of sortedErrors) {
+  for (const error of errors) {
     switch (error.type) {
       case 'UNCLOSED_STRING':
-        // Auto-fix: Add closing quote at end of line
-        if (error.line) {
-          const lines = fixedCode.split('\n');
-          const lineIndex = error.line - 1;
-          if (lineIndex >= 0 && lineIndex < lines.length) {
-            const line = lines[lineIndex];
-            
-            // Determine which quote type to add
-            if (error.message.includes('double')) {
-              lines[lineIndex] = line.trimEnd() + '"';
-            } else if (error.message.includes('single')) {
-              lines[lineIndex] = line.trimEnd() + "'";
-            } else if (error.message.includes('template')) {
-              lines[lineIndex] = line.trimEnd() + '`';
-            }
-            
-            fixedCode = lines.join('\n');
-          }
-        }
+        fixedCode = fixUnclosedStrings(fixedCode, error);
         break;
-        
-      case 'NESTED_FUNCTION':
-        // This is complex to auto-fix - would need to move entire function
-        // For now, just log that manual fix is needed
-        console.warn(`Manual fix needed for nested function at line ${error.line}`);
-        break;
-        
+      
       case 'UNBALANCED_JSX':
-        // Complex to auto-fix - would need to understand JSX structure
-        console.warn(`Manual fix needed for unbalanced JSX at line ${error.line}`);
+        // JSX tag fixing is complex - log for now
+        console.log(`Note: JSX tag issue at line ${error.line} requires manual fix`);
         break;
-        
+      
+      case 'NESTED_FUNCTION':
+        // Nested function fixing requires code restructuring - skip
+        console.log(`Note: Nested function at line ${error.line} requires manual fix`);
+        break;
+      
       case 'TYPESCRIPT_IN_JSX':
-        // Could potentially strip TypeScript syntax, but risky
-        // Better to let AI regenerate without TypeScript
-        console.warn(`Manual fix needed for TypeScript syntax at line ${error.line}`);
+        // TypeScript removal is risky - better to regenerate
+        console.log(`Note: TypeScript syntax at line ${error.line} requires manual fix`);
         break;
     }
   }
   
   return fixedCode;
+}
+
+/**
+ * Fixes unclosed string errors
+ */
+function fixUnclosedStrings(code: string, error: ValidationError): string {
+  if (!error.line) return code;
+  
+  const lines = code.split('\n');
+  const lineIndex = error.line - 1;
+  
+  if (lineIndex < 0 || lineIndex >= lines.length) return code;
+  
+  let line = lines[lineIndex];
+  
+  // Determine which quote type to add based on error message
+  if (error.message.includes('double')) {
+    line = line.trimEnd() + '"';
+  } else if (error.message.includes('single')) {
+    line = line.trimEnd() + "'";
+  } else if (error.message.includes('template')) {
+    line = line.trimEnd() + '`';
+  }
+  
+  lines[lineIndex] = line;
+  return lines.join('\n');
+}
+
+/**
+ * Legacy auto-fix function - kept for backward compatibility
+ * Attempts to automatically fix common issues
+ * 
+ * @deprecated Use validateGeneratedCode with autoFix=true instead
+ */
+export function autoFixCode(code: string, errors: ValidationError[]): string {
+  // Use the new attemptAutoFix implementation
+  return attemptAutoFix(code, errors);
 }
