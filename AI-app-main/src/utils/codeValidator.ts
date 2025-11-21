@@ -431,18 +431,10 @@ function attemptAutoFix(code: string, errors: ValidationError[]): string {
         break;
       
       case 'UNBALANCED_JSX':
-        // JSX tag fixing is complex - log for now
-        console.log(`Note: JSX tag issue at line ${error.line} requires manual fix`);
-        break;
-      
       case 'NESTED_FUNCTION':
-        // Nested function fixing requires code restructuring - skip
-        console.log(`Note: Nested function at line ${error.line} requires manual fix`);
-        break;
-      
       case 'TYPESCRIPT_IN_JSX':
-        // TypeScript removal is risky - better to regenerate
-        console.log(`Note: TypeScript syntax at line ${error.line} requires manual fix`);
+        // These require manual fixes - complex to auto-fix
+        // Skipping for now
         break;
     }
   }
@@ -480,7 +472,20 @@ function fixUnclosedStrings(code: string, error: ValidationError): string {
  * Legacy auto-fix function - kept for backward compatibility
  * Attempts to automatically fix common issues
  * 
- * @deprecated Use validateGeneratedCode with autoFix=true instead
+ * @deprecated since v0.2.0 - Use validateGeneratedCode(code, filePath, true) instead.
+ * This function will be removed in v1.0.0.
+ * 
+ * Migration example:
+ * ```typescript
+ * // Old way:
+ * const fixed = autoFixCode(code, errors);
+ * 
+ * // New way:
+ * const result = validateGeneratedCode(code, 'src/App.tsx', true);
+ * if (result.autoFixed && result.fixedCode) {
+ *   // Use result.fixedCode
+ * }
+ * ```
  */
 export function autoFixCode(code: string, errors: ValidationError[]): string {
   // Use the new attemptAutoFix implementation

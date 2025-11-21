@@ -23,5 +23,5 @@ module.exports = {
     }]
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  testTimeout: 10000,
+  testTimeout: 5000, // 5 seconds - use jest.setTimeout() for specific slow tests
 };

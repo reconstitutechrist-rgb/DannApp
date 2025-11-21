@@ -163,8 +163,8 @@ test('should detect unclosed JSX tag', () => {
 }`;
   const errors = hasBalancedJSXTags(code);
   // Note: This validator has limitations - may not catch all JSX errors
-  // If it doesn't find errors, that's OK - this is a known limitation
-  console.log(`    Found ${errors.length} JSX errors (validator has limitations)`);
+  // We're just verifying it runs without throwing
+  assertEqual(Array.isArray(errors), true, 'Should return an array');
 });
 
 test('should detect mismatched JSX tags', () => {
@@ -177,7 +177,8 @@ test('should detect mismatched JSX tags', () => {
 }`;
   const errors = hasBalancedJSXTags(code);
   // Note: Validator may not catch all mismatched tags due to complexity
-  console.log(`    Found ${errors.length} JSX mismatch errors (validator has limitations)`);
+  // We're just verifying it runs without throwing
+  assertEqual(Array.isArray(errors), true, 'Should return an array');
 });
 
 test('should NOT flag balanced JSX', () => {
