@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 // Hooks
-import { useAppStore } from "../store/useAppStore";
+import { useAIBuilderState } from "../hooks/useAIBuilderState";
 import { useChatSystem } from "../hooks/useChatSystem";
 import { useBuilderSettings } from "../hooks/useBuilderSettings";
 
@@ -67,21 +67,86 @@ import {
 
 export default function AIBuilder() {
   // --- STATE ---
-  const store = useAppStore();
+  const { state, dispatch } = useAIBuilderState();
   const chatSystem = useChatSystem();
   const { settings } = useBuilderSettings();
 
   const [isClient, setIsClient] = useState(false);
 
-  // Local state
+  // Modes
+  const [currentMode, setCurrentMode] = useState<"PLAN" | "ACT">("PLAN");
+  const previousModeRef = useRef<"PLAN" | "ACT">("PLAN");
+
+  // Uploads
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+
+  // Search
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Refs
-  const previousModeRef = useRef<"PLAN" | "ACT">("PLAN");
-  const autoSendMessageRef = useRef(false);
+  // Wizards & Plans
+  const [showConceptWizard, setShowConceptWizard] = useState(false);
+  const [showQuickStart, setShowQuickStart] = useState(false);
+  const [selectedQuickStartTemplate, setSelectedQuickStartTemplate] =
+    useState<QuickStartTemplate | null>(null);
+  const [implementationPlan, setImplementationPlan] =
+    useState<ImplementationPlan | null>(null);
+  const [guidedBuildMode, setGuidedBuildMode] = useState(false);
+
+  // Phases
+  const [activePhase, setActivePhase] = useState<BuildPhase | null>(null);
   const phaseStartTimeRef = useRef<number | null>(null);
+  const [showPhasePreview, setShowPhasePreview] = useState(false);
+  const [phaseToPreview, setPhaseToPreview] = useState<BuildPhase | null>(null);
+
+  // Staging / Templates
+  const [newAppStagePlan, setNewAppStagePlan] = useState<any>(null);
+  const [showNewAppStagingModal, setShowNewAppStagingModal] = useState(false);
+  const [pendingNewAppRequest, setPendingNewAppRequest] = useState<string>("");
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<ArchitectureTemplate | null>(null);
+  const [pendingTemplateRequest, setPendingTemplateRequest] =
+    useState<string>("");
+  const [currentStagePlan, setCurrentStagePlan] = useState<any>(null);
+
+  // Export / Deploy
+  const [showDeploymentModal, setShowDeploymentModal] = useState(false);
+  const [deploymentInstructions, setDeploymentInstructions] =
+    useState<DeploymentInstructions | null>(null);
+  const [exportingApp, setExportingApp] = useState<GeneratedComponent | null>(
+    null
+  );
+
+  // Compare
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareVersions, setCompareVersions] = useState<{
+    v1: AppVersion | null;
+    v2: AppVersion | null;
+  }>({ v1: null, v2: null });
+
+  // Analysis
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(
+    null
+  );
+  const [showQualityReport, setShowQualityReport] = useState(false);
+  const [isRunningReview, setIsRunningReview] = useState(false);
+  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
+  const [autoReviewEnabled, setAutoReviewEnabled] = useState(false);
+  const [lastReviewedCode, setLastReviewedCode] = useState<string | null>(null);
+
+  const [performanceReport, setPerformanceReport] =
+    useState<PerformanceReportType | null>(null);
+  const [showPerformanceReport, setShowPerformanceReport] = useState(false);
+  const [isRunningPerformanceAnalysis, setIsRunningPerformanceAnalysis] =
+    useState(false);
+  const [
+    isApplyingPerformanceOptimizations,
+    setIsApplyingPerformanceOptimizations,
+  ] = useState(false);
+
+  // Auto-send ref (for phased builds)
+  const autoSendMessageRef = useRef(false);
 
   // --- EFFECTS ---
 
@@ -100,9 +165,9 @@ export default function AIBuilder() {
   // Detect mode transitions
   useEffect(() => {
     const previousMode = previousModeRef.current;
-    previousModeRef.current = store.currentMode;
+    previousModeRef.current = currentMode;
 
-    if (previousMode === "PLAN" && store.currentMode === "ACT") {
+    if (previousMode === "PLAN" && currentMode === "ACT") {
       chatSystem.addMessage({
         id: Date.now().toString(),
         role: "system",
@@ -111,7 +176,7 @@ export default function AIBuilder() {
       });
     }
 
-    if (previousMode === "ACT" && store.currentMode === "PLAN") {
+    if (previousMode === "ACT" && currentMode === "PLAN") {
       chatSystem.addMessage({
         id: Date.now().toString(),
         role: "system",
@@ -119,27 +184,19 @@ export default function AIBuilder() {
         timestamp: new Date().toISOString(),
       });
     }
-  }, [store.currentMode]);
+  }, [currentMode]);
 
   // Auto-review
   useEffect(() => {
-    if (
-      store.autoReviewEnabled &&
-      store.currentComponent &&
-      store.lastReviewedCode
-    ) {
-      if (store.currentComponent.code !== store.lastReviewedCode) {
+    if (autoReviewEnabled && state.currentComponent && lastReviewedCode) {
+      if (state.currentComponent.code !== lastReviewedCode) {
         const timer = setTimeout(() => {
           handleRunCodeReview(false);
         }, 2000);
         return () => clearTimeout(timer);
       }
     }
-  }, [
-    store.currentComponent?.code,
-    store.autoReviewEnabled,
-    store.lastReviewedCode,
-  ]);
+  }, [state.currentComponent?.code, autoReviewEnabled, lastReviewedCode]);
 
   // Auto-send (phase starts)
   useEffect(() => {
@@ -202,7 +259,7 @@ export default function AIBuilder() {
       const optimizedContext = chatSystem.prepareConversationContext(prompt);
 
       // 1. PLAN MODE: Always chat
-      if (store.currentMode === "PLAN") {
+      if (currentMode === "PLAN") {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -229,7 +286,7 @@ export default function AIBuilder() {
           prompt.includes("?") ||
           prompt.toLowerCase().startsWith("how") ||
           prompt.toLowerCase().startsWith("what");
-        const isModification = !!store.currentComponent;
+        const isModification = !!state.currentComponent;
 
         if (isQuestion) {
           const response = await fetch("/api/chat", {
@@ -255,8 +312,8 @@ export default function AIBuilder() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               prompt,
-              currentAppState: store.currentComponent
-                ? JSON.parse(store.currentComponent.code)
+              currentAppState: state.currentComponent
+                ? JSON.parse(state.currentComponent.code)
                 : null,
               conversationHistory: optimizedContext,
             }),
@@ -265,13 +322,16 @@ export default function AIBuilder() {
           if (data.error) throw new Error(data.error);
 
           if (data.files) {
-            store.setPendingDiff({
-              id: Date.now().toString(),
-              summary: data.summary,
-              files: data.files,
-              timestamp: new Date().toISOString(),
+            dispatch({
+              type: "SET_PENDING_DIFF",
+              payload: {
+                id: Date.now().toString(),
+                summary: data.summary,
+                files: data.files,
+                timestamp: new Date().toISOString(),
+              },
             });
-            store.setShowDiffPreview(true);
+            dispatch({ type: "SET_SHOW_DIFF_PREVIEW", payload: true });
           }
         } else {
           // Build New App
@@ -282,7 +342,7 @@ export default function AIBuilder() {
               prompt,
               conversationHistory: optimizedContext,
               isModification: false,
-              templateName: store.selectedTemplate?.name,
+              templateName: selectedTemplate?.name,
             }),
           });
           const data = await response.json();
@@ -307,7 +367,7 @@ export default function AIBuilder() {
               },
             ],
           };
-          store.addComponent(newComponent);
+          dispatch({ type: "ADD_COMPONENT", payload: newComponent });
 
           chatSystem.addMessage({
             id: Date.now().toString(),
@@ -317,7 +377,7 @@ export default function AIBuilder() {
             componentCode: newComponent.code,
             componentPreview: true,
           });
-          store.setActiveTab("preview");
+          dispatch({ type: "SET_ACTIVE_TAB", payload: "preview" });
         }
       }
     } catch (error) {
@@ -339,13 +399,13 @@ export default function AIBuilder() {
   // --- OTHER HANDLERS ---
 
   const handleRunCodeReview = async (forceFullReview = false) => {
-    if (!store.currentComponent) return;
-    store.setIsRunningReview(true);
+    if (!state.currentComponent) return;
+    setIsRunningReview(true);
     try {
       // Mock implementation for refactor - real implementation would call API
       // Using setTimeout to simulate async work
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      store.setQualityReport({
+      setQualityReport({
         grade: "A",
         overallScore: 95,
         summary: "Excellent code quality",
@@ -361,26 +421,26 @@ export default function AIBuilder() {
         recommendations: [],
         strengths: [],
       });
-      store.setShowQualityReport(true);
-      store.setLastReviewedCode(store.currentComponent.code);
+      setShowQualityReport(true);
+      setLastReviewedCode(state.currentComponent.code);
     } catch (e) {
       console.error(e);
     } finally {
-      store.setIsRunningReview(false);
+      setIsRunningReview(false);
     }
   };
 
   const handleRunPerformanceAnalysis = async () => {
     // Mock implementation
-    store.setIsRunningPerformanceAnalysis(true);
-    setTimeout(() => store.setIsRunningPerformanceAnalysis(false), 1000);
+    setIsRunningPerformanceAnalysis(true);
+    setTimeout(() => setIsRunningPerformanceAnalysis(false), 1000);
   };
 
   const handleConceptComplete = (concept: AppConcept) => {
     const plan = generateImplementationPlan(concept);
-    store.setImplementationPlan(plan);
-    store.setShowConceptWizard(false);
-    store.setGuidedBuildMode(true);
+    setImplementationPlan(plan);
+    setShowConceptWizard(false);
+    setGuidedBuildMode(true);
     chatSystem.addMessage({
       id: Date.now().toString(),
       role: "system",
@@ -396,63 +456,73 @@ export default function AIBuilder() {
   };
 
   const handleExportApp = async (comp: GeneratedComponent) => {
-    store.setExportingApp(comp);
+    setExportingApp(comp);
     try {
       const appData = JSON.parse(comp.code);
       const files = parseAppFiles(appData);
       const zipBlob = await exportAppAsZip({ appName: comp.name, files });
       downloadBlob(zipBlob, `${comp.name}.zip`);
-      store.setDeploymentInstructions(
-        getDeploymentInstructions("vercel", comp.name)
-      );
-      store.setShowDeploymentModal(true);
+      setDeploymentInstructions(getDeploymentInstructions("vercel", comp.name));
+      setShowDeploymentModal(true);
     } catch (e) {
       console.error(e);
     } finally {
-      store.setExportingApp(null);
+      setExportingApp(null);
     }
   };
 
   const handleUndo = () => {
-    if (store.undoStack.length === 0 || !store.currentComponent) return;
-    const prev = store.undoStack[store.undoStack.length - 1];
+    if (state.undoStack.length === 0 || !state.currentComponent) return;
+    const prev = state.undoStack[state.undoStack.length - 1];
 
     // Push current to redo
-    store.pushRedo({
-      id: Date.now().toString(),
-      versionNumber: (store.currentComponent.versions?.length || 0) + 1,
-      code: store.currentComponent.code,
-      description: store.currentComponent.description,
-      timestamp: store.currentComponent.timestamp,
-      changeType: "MINOR_CHANGE",
+    dispatch({
+      type: "PUSH_REDO",
+      payload: {
+        id: Date.now().toString(),
+        versionNumber: (state.currentComponent.versions?.length || 0) + 1,
+        code: state.currentComponent.code,
+        description: state.currentComponent.description,
+        timestamp: state.currentComponent.timestamp,
+        changeType: "MINOR_CHANGE",
+      },
     });
 
     // Apply undo
-    store.popUndo();
-    store.updateComponent({
-      ...store.currentComponent,
-      code: prev.code,
-      description: prev.description,
+    dispatch({ type: "POP_UNDO" });
+    dispatch({
+      type: "UPDATE_COMPONENT",
+      payload: {
+        ...state.currentComponent,
+        code: prev.code,
+        description: prev.description,
+      },
     });
   };
 
   const handleRedo = () => {
-    if (store.redoStack.length === 0 || !store.currentComponent) return;
-    const next = store.redoStack[store.redoStack.length - 1];
+    if (state.redoStack.length === 0 || !state.currentComponent) return;
+    const next = state.redoStack[state.redoStack.length - 1];
 
-    store.pushUndo({
-      id: Date.now().toString(),
-      versionNumber: (store.currentComponent.versions?.length || 0) + 1,
-      code: store.currentComponent.code,
-      description: store.currentComponent.description,
-      timestamp: store.currentComponent.timestamp,
-      changeType: "MINOR_CHANGE",
+    dispatch({
+      type: "PUSH_UNDO",
+      payload: {
+        id: Date.now().toString(),
+        versionNumber: (state.currentComponent.versions?.length || 0) + 1,
+        code: state.currentComponent.code,
+        description: state.currentComponent.description,
+        timestamp: state.currentComponent.timestamp,
+        changeType: "MINOR_CHANGE",
+      },
     });
-    store.popRedo();
-    store.updateComponent({
-      ...store.currentComponent,
-      code: next.code,
-      description: next.description,
+    dispatch({ type: "POP_REDO" });
+    dispatch({
+      type: "UPDATE_COMPONENT",
+      payload: {
+        ...state.currentComponent,
+        code: next.code,
+        description: next.description,
+      },
     });
   };
 
@@ -468,54 +538,58 @@ export default function AIBuilder() {
   return (
     <div className="min-h-screen">
       <BuilderHeader
-        layoutMode={store.layoutMode}
-        onLayoutChange={(mode) => store.setLayoutMode(mode)}
-        themeManager={store.themeManager}
-        showVersionHistory={store.showVersionHistory}
-        setShowVersionHistory={() => store.toggleVersionHistory()}
-        currentComponent={store.currentComponent}
-        showLibrary={store.showLibrary}
-        setShowLibrary={() => store.toggleLibrary()}
-        componentsCount={store.components.length}
-        currentMode={store.currentMode}
-        setCurrentMode={store.setCurrentMode}
-        setShowQuickStart={store.setShowQuickStart}
-        implementationPlan={store.implementationPlan}
-        guidedBuildMode={store.guidedBuildMode}
-        setGuidedBuildMode={store.setGuidedBuildMode}
+        layoutMode={state.layoutMode}
+        onLayoutChange={(mode) =>
+          dispatch({ type: "SET_LAYOUT_MODE", payload: mode })
+        }
+        themeManager={state.themeManager}
+        showVersionHistory={state.showVersionHistory}
+        setShowVersionHistory={() =>
+          dispatch({ type: "TOGGLE_VERSION_HISTORY" })
+        }
+        currentComponent={state.currentComponent}
+        showLibrary={state.showLibrary}
+        setShowLibrary={() => dispatch({ type: "TOGGLE_LIBRARY" })}
+        componentsCount={state.components.length}
+        currentMode={currentMode}
+        setCurrentMode={setCurrentMode}
+        setShowQuickStart={setShowQuickStart}
+        implementationPlan={implementationPlan}
+        guidedBuildMode={guidedBuildMode}
+        setGuidedBuildMode={setGuidedBuildMode}
         handleRunCodeReview={handleRunCodeReview}
-        isRunningReview={store.isRunningReview}
-        qualityReport={store.qualityReport}
-        setShowQualityReport={store.setShowQualityReport}
-        autoReviewEnabled={store.autoReviewEnabled}
-        setAutoReviewEnabled={store.setAutoReviewEnabled}
+        isRunningReview={isRunningReview}
+        qualityReport={qualityReport}
+        setShowQualityReport={setShowQualityReport}
+        autoReviewEnabled={autoReviewEnabled}
+        setAutoReviewEnabled={setAutoReviewEnabled}
         handleRunPerformanceAnalysis={handleRunPerformanceAnalysis}
-        isRunningPerformanceAnalysis={store.isRunningPerformanceAnalysis}
-        performanceReport={store.performanceReport}
-        setShowPerformanceReport={store.setShowPerformanceReport}
+        isRunningPerformanceAnalysis={isRunningPerformanceAnalysis}
+        performanceReport={performanceReport}
+        setShowPerformanceReport={setShowPerformanceReport}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-4">
         <PanelGroup
-          direction={store.layoutMode === "stacked" ? "vertical" : "horizontal"}
+          direction={state.layoutMode === "stacked" ? "vertical" : "horizontal"}
           className="h-[calc(100vh-140px)]"
-          autoSaveId={`ai-builder-panels-${store.layoutMode}`}
+          autoSaveId={`ai-builder-panels-${state.layoutMode}`}
         >
           <Panel
-            defaultSize={store.layoutMode === "stacked" ? 50 : 30}
+            defaultSize={state.layoutMode === "stacked" ? 50 : 30}
             minSize={20}
             maxSize={80}
           >
-            {store.guidedBuildMode && store.implementationPlan ? (
+            {guidedBuildMode && implementationPlan ? (
               <GuidedBuildView
-                plan={store.implementationPlan}
+                plan={implementationPlan}
                 onPhaseStart={(phase) => {
-                  store.setActivePhase(phase);
+                  setActivePhase(phase);
                   phaseStartTimeRef.current = Date.now();
                   // Mock logic for starting phase
                 }}
-                onUpdatePlan={store.setImplementationPlan}
-                onExit={() => store.setGuidedBuildMode(false)}
+                onUpdatePlan={setImplementationPlan}
+                onExit={() => setGuidedBuildMode(false)}
               />
             ) : (
               <ChatPanel
@@ -530,74 +604,78 @@ export default function AIBuilder() {
                 uploadedImage={uploadedImage}
                 onRemoveImage={removeImage}
                 onImageUpload={handleImageUpload}
-                onViewComponent={() => store.setActiveTab("preview")}
-                currentMode={store.currentMode}
-                setCurrentMode={store.setCurrentMode}
-                newAppStagePlan={store.newAppStagePlan}
+                onViewComponent={() =>
+                  dispatch({ type: "SET_ACTIVE_TAB", payload: "preview" })
+                }
+                currentMode={currentMode}
+                setCurrentMode={setCurrentMode}
+                newAppStagePlan={newAppStagePlan}
               />
             )}
           </Panel>
 
           <PanelResizeHandle
             className={`
-            ${store.layoutMode === "stacked" ? "h-1.5 my-1" : "w-1.5 mx-1"}
+            ${state.layoutMode === "stacked" ? "h-1.5 my-1" : "w-1.5 mx-1"}
             bg-transparent hover:bg-primary-500/20 transition-colors rounded-full
             flex items-center justify-center group
           `}
           >
             <div
               className={`${
-                store.layoutMode === "stacked" ? "w-8 h-0.5" : "w-0.5 h-8"
+                state.layoutMode === "stacked" ? "w-8 h-0.5" : "w-0.5 h-8"
               } bg-white/10 group-hover:bg-primary-500/50 transition-colors rounded-full`}
             />
           </PanelResizeHandle>
 
           <Panel defaultSize={70}>
             <PreviewPanel
-              activeTab={store.activeTab}
-              currentComponent={store.currentComponent}
-              onSetActiveTab={(tab) => store.setActiveTab(tab)}
+              activeTab={state.activeTab}
+              currentComponent={state.currentComponent}
+              onSetActiveTab={(tab) =>
+                dispatch({ type: "SET_ACTIVE_TAB", payload: tab })
+              }
               onUndo={handleUndo}
               onRedo={handleRedo}
-              canUndo={store.undoStack.length > 0}
-              canRedo={store.redoStack.length > 0}
+              canUndo={state.undoStack.length > 0}
+              canRedo={state.redoStack.length > 0}
               onFork={handleForkApp}
               onExport={handleExportApp}
               onDownload={() => {
-                if (!store.currentComponent) return;
-                const blob = new Blob([store.currentComponent.code], {
+                if (!state.currentComponent) return;
+                const blob = new Blob([state.currentComponent.code], {
                   type: "text/plain",
                 });
-                downloadBlob(blob, `${store.currentComponent.name}.tsx`);
+                downloadBlob(blob, `${state.currentComponent.name}.tsx`);
               }}
-              isExporting={!!store.exportingApp}
+              isExporting={!!exportingApp}
             />
           </Panel>
         </PanelGroup>
       </div>
 
       {/* Modals & Overlays */}
-      {store.showQuickStart && (
+      {showQuickStart && (
         <QuickStartSelector
-          isOpen={store.showQuickStart}
-          onClose={() => store.setShowQuickStart(false)}
+          isOpen={showQuickStart}
+          onClose={() => setShowQuickStart(false)}
           onSelect={(t) => {
-            store.setSelectedQuickStartTemplate(t);
-            store.setShowQuickStart(false);
-            store.setShowConceptWizard(true);
+            setSelectedQuickStartTemplate(t);
+            setShowQuickStart(false);
+            setShowConceptWizard(true);
           }}
           onSkip={() => {
-            store.setSelectedQuickStartTemplate(null);
-            store.setShowQuickStart(false);
-            store.setShowConceptWizard(true);
+            setSelectedQuickStartTemplate(null);
+            setShowQuickStart(false);
+            setShowConceptWizard(true);
           }}
         />
       )}
 
-      {store.showConceptWizard && (
+      {showConceptWizard && (
         <ConversationalAppWizard
           onComplete={handleConceptComplete}
-          onCancel={() => store.setShowConceptWizard(false)}
+          onCancel={() => setShowConceptWizard(false)}
         />
       )}
 

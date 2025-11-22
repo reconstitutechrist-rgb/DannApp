@@ -11,12 +11,14 @@ Build complete React and Next.js applications through natural conversation with 
 ## ✨ Key Features
 
 ### 🤖 **Conversation-First Interface**
+
 - Chat with AI like you're talking to a developer
 - Natural language app generation
 - Iterative refinements through conversation
 - Q&A mode for programming questions
 
 ### 🎯 **PLAN/ACT Dual Mode System**
+
 - **PLAN Mode**: Discussion and planning without code generation
   - Design app architecture and requirements
   - Create roadmaps and feature specifications
@@ -30,12 +32,14 @@ Build complete React and Next.js applications through natural conversation with 
 - **Toggle anytime**: Switch modes based on your needs
 
 ### 🏗️ **Full-Stack Support**
+
 - **Frontend-only apps**: Instant preview in browser
 - **Full-stack apps**: Next.js with database, auth, APIs
 - Prisma ORM, NextAuth.js, API routes included
 - One-click export with deployment instructions
 
 ### 🔄 **Smart Modification System**
+
 - Diff-based surgical edits (Phase 2 complete)
 - Only changes what you request - preserves everything else
 - Simple changes: Auto-applied instantly
@@ -43,6 +47,7 @@ Build complete React and Next.js applications through natural conversation with 
 - Staged modifications for big features
 
 ### 📸 **Image-Inspired Designs with Layout Preview**
+
 - Upload screenshots, mockups, or design references
 - AI extracts colors, styles, patterns, and layout structure
 - Visual layout preview during wizard (mobile/tablet/desktop)
@@ -50,6 +55,7 @@ Build complete React and Next.js applications through natural conversation with 
 - Perfect for replicating existing designs or prototypes
 
 ### 🕒 **Advanced Version Control**
+
 - Automatic version saving on every change
 - Unlimited undo/redo (Ctrl+Z / Ctrl+Shift+Z)
 - Fork/branch to create alternative versions
@@ -57,12 +63,14 @@ Build complete React and Next.js applications through natural conversation with 
 - One-click revert to any previous version
 
 ### 📦 **Export & Deploy**
+
 - Download as ZIP with complete project structure
 - Includes package.json, configuration, README
 - Deployment instructions for Vercel/Netlify
 - Ready for production use
 
 ### 🔐 **Password Protected**
+
 - Built-in authentication
 - Default password: "Nerd" (change in `.env.local`)
 - Multi-user ready
@@ -72,7 +80,8 @@ Build complete React and Next.js applications through natural conversation with 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
+
+- Node.js 18+
 - Anthropic API key ([Get one here](https://console.anthropic.com/))
 
 ### Installation
@@ -109,40 +118,49 @@ SITE_PASSWORD=Nerd
 ## 💡 How to Use
 
 ### 1. **Choose Your Mode**
+
 - **PLAN Mode**: Design and plan your app without generating code
 - **ACT Mode**: Generate code and build your app
 - Toggle between modes anytime using the mode selector
 
 ### 2. **Start a Conversation**
+
 Just describe what you want to build:
+
 - "Build a todo app with priorities"
 - "Create a blog with dark mode"
 - "Make a dashboard with charts"
 
 ### 3. **Upload Design References (Optional)**
+
 - Upload screenshots or mockups for design inspiration
 - AI extracts colors, styles, and layout structure
 - See visual layout preview before building
 
 ### 4. **Iterative Refinement**
+
 Continue the conversation to improve:
+
 - "Add a dark mode toggle"
 - "Make the buttons blue"
 - "Add export to CSV functionality"
 
 ### 5. **Preview & Test**
+
 - Frontend apps: Instant live preview
 - Full-stack apps: Download and run locally
 - Fullscreen mode available
 - View/edit code in browser
 
 ### 6. **Version Control**
+
 - **Ctrl+Z**: Undo last change
 - **Ctrl+Shift+Z**: Redo
 - Click **🕒 History** to see all versions
 - Fork to create alternative versions
 
 ### 7. **Export & Deploy**
+
 - Click **📦 Export** for deployment instructions
 - Download ZIP with complete project
 - Deploy to Vercel, Netlify, or anywhere
@@ -152,12 +170,14 @@ Continue the conversation to improve:
 ## 🎯 What Can You Build?
 
 ### Frontend-Only Apps (Instant Preview)
+
 - ✅ Todo lists, calculators, games
-- ✅ Dashboards, charts, data visualizations  
+- ✅ Dashboards, charts, data visualizations
 - ✅ Landing pages, portfolios
 - ✅ UI components, design systems
 
 ### Full-Stack Apps (Download Required)
+
 - ⚡ Blogs with CMS
 - ⚡ E-commerce platforms
 - ⚡ SaaS applications
@@ -170,6 +190,7 @@ Continue the conversation to improve:
 ## 🛠️ Technology Stack
 
 ### Core
+
 - **AI**: Claude Sonnet 4.5-20250929 (Anthropic)
 - **Framework**: Next.js 16.0.1 with App Router
 - **Runtime**: React 19.2.0
@@ -177,17 +198,20 @@ Continue the conversation to improve:
 - **Styling**: Tailwind CSS 4.0.0
 
 ### Preview System
+
 - **Sandpack**: Browser-based React preview (v2.20.0)
 - **Live Editing**: Real-time code updates
 - **Resizable Panels**: react-resizable-panels 3.0.0
 
 ### Code Parsing & Modification
+
 - **AST Operations**: tree-sitter 0.25.0
 - **JavaScript/TypeScript**: tree-sitter-javascript, tree-sitter-typescript
 - **Surgical Edits**: Custom AST modifier for precise code changes
 - **Smart Diffs**: Only modifies what you request
 
 ### Full-Stack Capabilities
+
 - **Database**: Prisma ORM (PostgreSQL, MySQL, MongoDB, SQLite)
 - **Authentication**: NextAuth.js (OAuth, JWT) + Supabase Auth
 - **File Upload**: Local storage or cloud (S3, Cloudinary)
@@ -211,9 +235,11 @@ Continue the conversation to improve:
 ## 🏗️ Architecture & Code Organization
 
 ### Component Architecture
+
 The app is built with a clean, modular architecture:
 
 **Core Components:**
+
 - **AIBuilder.tsx** - Main orchestrator (refactored: 4131 → 581 lines)
 - **BuilderHeader.tsx** - Navigation, mode toggle, layout controls
 - **ChatPanel.tsx** - Conversation interface with PLAN/ACT toggle
@@ -221,15 +247,18 @@ The app is built with a clean, modular architecture:
 - **LayoutPreview.tsx** - Visual layout mockups during planning
 
 **State Management Hooks:**
-- **useAIBuilderState.ts** - Centralized state with reducer pattern
+
+- **useAppStore.ts** - Centralized Zustand store (replaced useAIBuilderState)
 - **useChatSystem.ts** - Chat logic with conversation memory
 - **useBuilderSettings.ts** - Settings persistence with localStorage
 
 **Type Organization:**
+
 - **aiBuilderTypes.ts** - Builder state and UI types
 - **appConcept.ts** - App planning and phase types
 
 **Benefits:**
+
 - 85% reduction in main component complexity
 - Improved testability and maintainability
 - Better code organization and reusability
@@ -240,27 +269,33 @@ The app is built with a clean, modular architecture:
 ## 🔑 Features in Detail
 
 ### PLAN/ACT Dual Mode System
+
 The app offers two distinct conversation modes:
 
 **PLAN Mode (Discussion & Planning):**
+
 - Design app architecture without generating code
 - Create roadmaps and feature specifications
 - Ask clarifying questions and explore ideas
 - Perfect for requirements gathering and planning
 
 **ACT Mode (Code Generation):**
+
 - Answer programming questions
 - Generate complete applications
 - Apply modifications to existing code
 - Iterate and refine through conversation
 
 **Smart Mode Detection:**
+
 - AI automatically understands context
 - Toggle manually anytime using the mode selector
 - Seamless switching between planning and building
 
 ### Modification System with AST
+
 Smart diff-based modifications using Abstract Syntax Trees:
+
 - **Simple changes**: Color, text, styling → Auto-applied instantly
 - **Medium changes**: New features, dark mode → Auto-applied with preview
 - **Complex changes**: Auth, major refactors → Requires approval
@@ -268,7 +303,9 @@ Smart diff-based modifications using Abstract Syntax Trees:
 - **Enhanced phase review**: Side-by-side comparison of planned vs implemented phases
 
 ### Image Upload with Layout Preview
+
 Upload any image and AI will:
+
 - Extract color palette and design tokens
 - Identify design style and patterns
 - Generate visual layout preview (mobile/tablet/desktop)
@@ -281,11 +318,13 @@ Upload any image and AI will:
 ## ⌨️ Keyboard Shortcuts
 
 ### Version Control
+
 - `Ctrl+Z` / `Cmd+Z` - Undo
 - `Ctrl+Shift+Z` / `Cmd+Shift+Z` - Redo
 - `Ctrl+Y` / `Cmd+Y` - Redo (alternative)
 
 ### Interface
+
 - `Enter` - Send message
 - `Esc` - Close modals
 
@@ -294,17 +333,20 @@ Upload any image and AI will:
 ## 🐛 Known Issues
 
 ### ~~Complex Modifications~~ ✅ SOLVED IN PHASE 5
+
 **Update:** Authentication and complex modifications now work reliably via AST operations!
 
 **Try it:** Just say "add authentication" - works automatically in one command.
 
 **What works now:**
+
 - ✅ Complete authentication system (login/logout)
 - ✅ State management with hooks
 - ✅ Component wrapping and conditional rendering
 - ✅ Function injection and JSX modifications
 
 ### Token Limits
+
 Very large apps may approach the 16K token limit. **Solution**: Build incrementally through conversation stages.
 
 See [Troubleshooting Guide](./TROUBLESHOOTING.md) for more.
@@ -314,6 +356,7 @@ See [Troubleshooting Guide](./TROUBLESHOOTING.md) for more.
 ## 🚀 Deployment
 
 ### Vercel (Recommended)
+
 ```bash
 # Install Vercel CLI
 npm i -g vercel
@@ -327,8 +370,9 @@ vercel
 ```
 
 ### Netlify
+
 ```bash
-# Install Netlify CLI  
+# Install Netlify CLI
 npm i -g netlify-cli
 
 # Deploy
@@ -353,6 +397,7 @@ See [Deployment Guide](./DEPLOYMENT_GUIDE.md) for detailed instructions.
 - 📝 **Phase 4**: Skipped/Merged with Phase 3
 
 **Latest Updates:**
+
 - Enhanced phase review with side-by-side plan vs implementation comparison
 - Image upload support for design-based generation
 - PLAN/ACT dual-mode conversation system

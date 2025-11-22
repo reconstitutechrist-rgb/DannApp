@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Zap,
   ShoppingCart,
@@ -11,8 +11,8 @@ import {
   X,
   ArrowRight,
   Sparkles,
-} from 'lucide-react';
-import type { AppConcept, Feature } from '@/types/appConcept';
+} from "lucide-react";
+import type { AppConcept, Feature } from "@/types/appConcept";
 
 export interface QuickStartTemplate {
   id: string;
@@ -27,29 +27,41 @@ export interface QuickStartTemplate {
 
 const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
   {
-    id: 'saas-dashboard',
-    name: 'SaaS Dashboard',
-    description: 'Admin panel with analytics, user management, and settings',
+    id: "saas-dashboard",
+    name: "SaaS Dashboard",
+    description: "Admin panel with analytics, user management, and settings",
     icon: Briefcase,
-    category: 'Business',
-    color: 'from-blue-500/20 to-cyan-500/20',
-    features: ['User Authentication', 'Analytics Dashboard', 'User Management', 'Settings Panel', 'API Integration'],
+    category: "Business",
+    color: "from-blue-500/20 to-cyan-500/20",
+    features: [
+      "User Authentication",
+      "Analytics Dashboard",
+      "User Management",
+      "Settings Panel",
+      "API Integration",
+    ],
     concept: {
-      name: 'SaaS Dashboard',
-      description: 'A modern admin dashboard for managing users, viewing analytics, and configuring application settings',
-      purpose: 'Provide administrators with tools to manage users, track metrics, and configure the platform',
-      targetUsers: 'administrators, product managers, support teams',
+      name: "SaaS Dashboard",
+      description:
+        "A modern admin dashboard for managing users, viewing analytics, and configuring application settings",
+      purpose:
+        "Provide administrators with tools to manage users, track metrics, and configure the platform",
+      targetUsers: "administrators, product managers, support teams",
       uiPreferences: {
-        style: 'modern',
-        colorScheme: 'dark',
-        layout: 'dashboard',
-        primaryColor: '#3b82f6',
+        style: "modern",
+        colorScheme: "dark",
+        layout: "dashboard",
+        primaryColor: "#3b82f6",
       },
       technical: {
         needsAuth: true,
-        authType: 'email',
+        authType: "email",
         needsDatabase: true,
-        dataModels: ['User', 'Analytics', 'Settings'],
+        dataModels: [
+          { name: "User", fields: [] },
+          { name: "Analytics", fields: [] },
+          { name: "Settings", fields: [] },
+        ],
         needsAPI: true,
         needsFileUpload: false,
         needsRealtime: false,
@@ -57,29 +69,42 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     },
   },
   {
-    id: 'ecommerce-store',
-    name: 'E-commerce Store',
-    description: 'Online store with products, cart, and checkout',
+    id: "ecommerce-store",
+    name: "E-commerce Store",
+    description: "Online store with products, cart, and checkout",
     icon: ShoppingCart,
-    category: 'E-commerce',
-    color: 'from-green-500/20 to-emerald-500/20',
-    features: ['Product Catalog', 'Shopping Cart', 'Checkout Flow', 'Payment Processing', 'Order Management'],
+    category: "E-commerce",
+    color: "from-green-500/20 to-emerald-500/20",
+    features: [
+      "Product Catalog",
+      "Shopping Cart",
+      "Checkout Flow",
+      "Payment Processing",
+      "Order Management",
+    ],
     concept: {
-      name: 'Online Store',
-      description: 'A complete e-commerce platform for selling products online with secure payment processing',
-      purpose: 'Enable merchants to sell products online and customers to browse, purchase, and track orders',
-      targetUsers: 'shoppers, merchants',
+      name: "Online Store",
+      description:
+        "A complete e-commerce platform for selling products online with secure payment processing",
+      purpose:
+        "Enable merchants to sell products online and customers to browse, purchase, and track orders",
+      targetUsers: "shoppers, merchants",
       uiPreferences: {
-        style: 'modern',
-        colorScheme: 'light',
-        layout: 'multi-page',
-        primaryColor: '#10b981',
+        style: "modern",
+        colorScheme: "light",
+        layout: "multi-page",
+        primaryColor: "#10b981",
       },
       technical: {
         needsAuth: true,
-        authType: 'email',
+        authType: "email",
         needsDatabase: true,
-        dataModels: ['Product', 'Order', 'Cart', 'User'],
+        dataModels: [
+          { name: "Product", fields: [] },
+          { name: "Order", fields: [] },
+          { name: "Cart", fields: [] },
+          { name: "User", fields: [] },
+        ],
         needsAPI: true,
         needsFileUpload: true,
         needsRealtime: false,
@@ -87,29 +112,43 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     },
   },
   {
-    id: 'blog-platform',
-    name: 'Blog Platform',
-    description: 'Content management system with posts, categories, and comments',
+    id: "blog-platform",
+    name: "Blog Platform",
+    description:
+      "Content management system with posts, categories, and comments",
     icon: FileText,
-    category: 'Content',
-    color: 'from-purple-500/20 to-pink-500/20',
-    features: ['Blog Posts', 'Rich Text Editor', 'Categories & Tags', 'Comments', 'Search'],
+    category: "Content",
+    color: "from-purple-500/20 to-pink-500/20",
+    features: [
+      "Blog Posts",
+      "Rich Text Editor",
+      "Categories & Tags",
+      "Comments",
+      "Search",
+    ],
     concept: {
-      name: 'Blog Platform',
-      description: 'A modern blogging platform with rich content editing, categorization, and reader engagement',
-      purpose: 'Allow writers to publish content and readers to discover and engage with articles',
-      targetUsers: 'writers, bloggers, readers',
+      name: "Blog Platform",
+      description:
+        "A modern blogging platform with rich content editing, categorization, and reader engagement",
+      purpose:
+        "Allow writers to publish content and readers to discover and engage with articles",
+      targetUsers: "writers, bloggers, readers",
       uiPreferences: {
-        style: 'minimalist',
-        colorScheme: 'auto',
-        layout: 'multi-page',
-        primaryColor: '#a855f7',
+        style: "minimalist",
+        colorScheme: "auto",
+        layout: "multi-page",
+        primaryColor: "#a855f7",
       },
       technical: {
         needsAuth: true,
-        authType: 'email',
+        authType: "email",
         needsDatabase: true,
-        dataModels: ['Post', 'Category', 'Comment', 'User'],
+        dataModels: [
+          { name: "Post", fields: [] },
+          { name: "Category", fields: [] },
+          { name: "Comment", fields: [] },
+          { name: "User", fields: [] },
+        ],
         needsAPI: false,
         needsFileUpload: true,
         needsRealtime: false,
@@ -117,29 +156,42 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     },
   },
   {
-    id: 'social-network',
-    name: 'Social Network',
-    description: 'Community platform with profiles, posts, and messaging',
+    id: "social-network",
+    name: "Social Network",
+    description: "Community platform with profiles, posts, and messaging",
     icon: Users,
-    category: 'Social',
-    color: 'from-orange-500/20 to-red-500/20',
-    features: ['User Profiles', 'Feed & Posts', 'Likes & Comments', 'Follow System', 'Messaging'],
+    category: "Social",
+    color: "from-orange-500/20 to-red-500/20",
+    features: [
+      "User Profiles",
+      "Feed & Posts",
+      "Likes & Comments",
+      "Follow System",
+      "Messaging",
+    ],
     concept: {
-      name: 'Social Network',
-      description: 'A social platform where users can connect, share content, and communicate with each other',
-      purpose: 'Enable users to build connections, share updates, and engage with their network',
-      targetUsers: 'general users, content creators, communities',
+      name: "Social Network",
+      description:
+        "A social platform where users can connect, share content, and communicate with each other",
+      purpose:
+        "Enable users to build connections, share updates, and engage with their network",
+      targetUsers: "general users, content creators, communities",
       uiPreferences: {
-        style: 'modern',
-        colorScheme: 'dark',
-        layout: 'dashboard',
-        primaryColor: '#f97316',
+        style: "modern",
+        colorScheme: "dark",
+        layout: "dashboard",
+        primaryColor: "#f97316",
       },
       technical: {
         needsAuth: true,
-        authType: 'email',
+        authType: "email",
         needsDatabase: true,
-        dataModels: ['User', 'Post', 'Comment', 'Message'],
+        dataModels: [
+          { name: "User", fields: [] },
+          { name: "Post", fields: [] },
+          { name: "Comment", fields: [] },
+          { name: "Message", fields: [] },
+        ],
         needsAPI: false,
         needsFileUpload: true,
         needsRealtime: true,
@@ -147,29 +199,41 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     },
   },
   {
-    id: 'task-manager',
-    name: 'Task Manager',
-    description: 'Productivity app with tasks, projects, and due dates',
+    id: "task-manager",
+    name: "Task Manager",
+    description: "Productivity app with tasks, projects, and due dates",
     icon: Zap,
-    category: 'Productivity',
-    color: 'from-yellow-500/20 to-amber-500/20',
-    features: ['Task Lists', 'Projects', 'Due Dates & Reminders', 'Priority Levels', 'Search & Filter'],
+    category: "Productivity",
+    color: "from-yellow-500/20 to-amber-500/20",
+    features: [
+      "Task Lists",
+      "Projects",
+      "Due Dates & Reminders",
+      "Priority Levels",
+      "Search & Filter",
+    ],
     concept: {
-      name: 'Task Manager',
-      description: 'A productivity tool for organizing tasks, managing projects, and tracking deadlines',
-      purpose: 'Help individuals and teams stay organized and productive by managing tasks efficiently',
-      targetUsers: 'freelancers, teams, project managers',
+      name: "Task Manager",
+      description:
+        "A productivity tool for organizing tasks, managing projects, and tracking deadlines",
+      purpose:
+        "Help individuals and teams stay organized and productive by managing tasks efficiently",
+      targetUsers: "freelancers, teams, project managers",
       uiPreferences: {
-        style: 'modern',
-        colorScheme: 'auto',
-        layout: 'dashboard',
-        primaryColor: '#eab308',
+        style: "modern",
+        colorScheme: "auto",
+        layout: "dashboard",
+        primaryColor: "#eab308",
       },
       technical: {
         needsAuth: true,
-        authType: 'email',
+        authType: "email",
         needsDatabase: true,
-        dataModels: ['Task', 'Project', 'User'],
+        dataModels: [
+          { name: "Task", fields: [] },
+          { name: "Project", fields: [] },
+          { name: "User", fields: [] },
+        ],
         needsAPI: false,
         needsFileUpload: false,
         needsRealtime: true,
@@ -177,23 +241,31 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     },
   },
   {
-    id: 'portfolio-site',
-    name: 'Portfolio Site',
-    description: 'Showcase your work with projects, about, and contact',
+    id: "portfolio-site",
+    name: "Portfolio Site",
+    description: "Showcase your work with projects, about, and contact",
     icon: Palette,
-    category: 'Personal',
-    color: 'from-indigo-500/20 to-violet-500/20',
-    features: ['Project Gallery', 'About Page', 'Contact Form', 'Resume/CV', 'Dark Mode'],
+    category: "Personal",
+    color: "from-indigo-500/20 to-violet-500/20",
+    features: [
+      "Project Gallery",
+      "About Page",
+      "Contact Form",
+      "Resume/CV",
+      "Dark Mode",
+    ],
     concept: {
-      name: 'Portfolio Website',
-      description: 'A professional portfolio to showcase projects, skills, and achievements',
-      purpose: 'Present work to potential clients and employers in an engaging way',
-      targetUsers: 'designers, developers, creatives',
+      name: "Portfolio Website",
+      description:
+        "A professional portfolio to showcase projects, skills, and achievements",
+      purpose:
+        "Present work to potential clients and employers in an engaging way",
+      targetUsers: "designers, developers, creatives",
       uiPreferences: {
-        style: 'modern',
-        colorScheme: 'dark',
-        layout: 'single-page',
-        primaryColor: '#6366f1',
+        style: "modern",
+        colorScheme: "dark",
+        layout: "single-page",
+        primaryColor: "#6366f1",
       },
       technical: {
         needsAuth: false,
@@ -276,8 +348,8 @@ export const QuickStartSelector: React.FC<QuickStartSelectorProps> = ({
                   onClick={() => handleSelect(template)}
                   className={`group text-left glass-subtle rounded-xl p-5 transition-all border ${
                     isSelected
-                      ? 'border-primary-500/50 scale-95'
-                      : 'border-transparent hover:border-primary-500/30 hover:bg-white/5'
+                      ? "border-primary-500/50 scale-95"
+                      : "border-transparent hover:border-primary-500/30 hover:bg-white/5"
                   }`}
                 >
                   {/* Icon */}
@@ -305,7 +377,10 @@ export const QuickStartSelector: React.FC<QuickStartSelectorProps> = ({
                   {/* Features */}
                   <div className="space-y-1.5 mb-4">
                     {template.features.slice(0, 3).map((feature, index) => (
-                      <div key={index} className="flex items-center gap-2 text-xs text-neutral-500">
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 text-xs text-neutral-500"
+                      >
                         <div className="w-1 h-1 rounded-full bg-primary-400/50" />
                         {feature}
                       </div>
