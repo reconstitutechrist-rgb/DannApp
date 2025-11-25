@@ -7,8 +7,54 @@
  * - Generates extraction suggestions with props
  * - Creates new component files
  *
- * @version 1.0.0
+ * @version 1.0.1
  */
+
+// Pre-compiled regex patterns for better performance (compiled once at module load)
+const JSX_BLOCK_PATTERNS = [
+  // Large div blocks
+  {
+    pattern: /<div className="[^"]*"[^>]*>[\s\S]{200,}?<\/div>/g,
+    name: 'Section',
+    reason: 'Large div block detected'
+  },
+  // Form elements
+  {
+    pattern: /<form[\s\S]{100,}?<\/form>/g,
+    name: 'Form',
+    reason: 'Form element detected'
+  },
+  // Modal/Dialog patterns
+  {
+    pattern: /<div[^>]*modal[^>]*>[\s\S]{100,}?<\/div>/gi,
+    name: 'Modal',
+    reason: 'Modal component detected'
+  },
+  // Card patterns
+  {
+    pattern: /<div[^>]*card[^>]*>[\s\S]{100,}?<\/div>/gi,
+    name: 'Card',
+    reason: 'Card component detected'
+  },
+  // Header patterns
+  {
+    pattern: /<header[\s\S]{100,}?<\/header>/g,
+    name: 'Header',
+    reason: 'Header component detected'
+  },
+  // Footer patterns
+  {
+    pattern: /<footer[\s\S]{100,}?<\/footer>/g,
+    name: 'Footer',
+    reason: 'Footer component detected'
+  },
+  // List rendering with map
+  {
+    pattern: /\{[\s\S]*?\.map\([^)]+\)\s*=>[\s\S]{50,}?\)/g,
+    name: 'Item',
+    reason: 'Repeated list rendering detected'
+  }
+] as const;
 
 export interface ExtractionSuggestion {
   reason: string;
@@ -76,57 +122,14 @@ function calculateComplexity(code: string, lineCount: number): number {
 
 /**
  * Find candidates for component extraction
+ * Uses pre-compiled regex patterns for better performance
  */
 function findExtractionCandidates(code: string, filePath: string): ExtractionSuggestion[] {
   const suggestions: ExtractionSuggestion[] = [];
 
-  // Extract JSX blocks that are good candidates for extraction
-  const jsxBlockPatterns = [
-    // Large div blocks
-    {
-      pattern: /<div className="[^"]*"[^>]*>[\s\S]{200,}?<\/div>/g,
-      name: 'Section',
-      reason: 'Large div block detected'
-    },
-    // Form elements
-    {
-      pattern: /<form[\s\S]{100,}?<\/form>/g,
-      name: 'Form',
-      reason: 'Form element detected'
-    },
-    // Modal/Dialog patterns
-    {
-      pattern: /<div[^>]*modal[^>]*>[\s\S]{100,}?<\/div>/gi,
-      name: 'Modal',
-      reason: 'Modal component detected'
-    },
-    // Card patterns
-    {
-      pattern: /<div[^>]*card[^>]*>[\s\S]{100,}?<\/div>/gi,
-      name: 'Card',
-      reason: 'Card component detected'
-    },
-    // Header patterns
-    {
-      pattern: /<header[\s\S]{100,}?<\/header>/g,
-      name: 'Header',
-      reason: 'Header component detected'
-    },
-    // Footer patterns
-    {
-      pattern: /<footer[\s\S]{100,}?<\/footer>/g,
-      name: 'Footer',
-      reason: 'Footer component detected'
-    },
-    // List rendering with map
-    {
-      pattern: /\{[\s\S]*?\.map\([^)]+\)\s*=>[\s\S]{50,}?\)/g,
-      name: 'Item',
-      reason: 'Repeated list rendering detected'
-    }
-  ];
-
-  for (const { pattern, name, reason } of jsxBlockPatterns) {
+  for (const { pattern, name, reason } of JSX_BLOCK_PATTERNS) {
+    // Reset lastIndex for global regexes to ensure fresh matching
+    pattern.lastIndex = 0;
     const matches = code.match(pattern);
 
     if (matches) {
