@@ -121,9 +121,7 @@ interface DataSlice {
 
   // Staging
   newAppStagePlan: any;
-  showNewAppStagingModal: boolean;
   pendingNewAppRequest: string;
-  showTemplateSelector: boolean;
   selectedTemplate: ArchitectureTemplate | null;
   pendingTemplateRequest: string;
   currentStagePlan: any;

@@ -128,8 +128,7 @@ function findExtractionCandidates(code: string, filePath: string): ExtractionSug
   const suggestions: ExtractionSuggestion[] = [];
 
   for (const { pattern, name, reason } of JSX_BLOCK_PATTERNS) {
-    // Reset lastIndex for global regexes to ensure fresh matching
-    pattern.lastIndex = 0;
+    // String.match() with global regex always starts from beginning, no reset needed
     const matches = code.match(pattern);
 
     if (matches) {
