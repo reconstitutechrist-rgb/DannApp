@@ -295,7 +295,7 @@ export default function LayoutPreview({
             {(['mobile', 'tablet', 'desktop'] as const).map(mode => (
                <button
                   key={mode}
-                  onClick={(e) => { e.stopPropagation(); setVieeMode(mode); }}
+                  onClick={(e) => { e.stopPropagation(); setViewMode(mode); }}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === mode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                >
                   {mode.charAt(0).toUpperCase() + mode.slice(1)}
