@@ -87,6 +87,7 @@ export interface AnalyticsSummary {
 
 class AnalyticsLogger {
   private metrics: RequestMetrics[] = [];
+  private metricsById: Map<string, RequestMetrics> = new Map(); // O(1) lookup
   private maxStoredMetrics = 1000; // Keep last 1000 requests in memory
   
   /**
@@ -102,6 +103,7 @@ class AnalyticsLogger {
     };
     
     this.metrics.push(metric);
+    this.metricsById.set(requestId, metric); // Add to map for O(1) lookup
     this.trimMetrics();
     
     if (process.env.NODE_ENV === 'development') {
@@ -300,6 +302,7 @@ class AnalyticsLogger {
    */
   clear(): void {
     this.metrics = [];
+    this.metricsById.clear();
     console.log('[Analytics] Metrics cleared');
   }
   
@@ -315,11 +318,16 @@ class AnalyticsLogger {
   // ============================================================================
   
   private findMetric(requestId: string): RequestMetrics | undefined {
-    return this.metrics.find(m => m.requestId === requestId);
+    return this.metricsById.get(requestId); // O(1) lookup instead of O(n)
   }
   
   private trimMetrics(): void {
     if (this.metrics.length > this.maxStoredMetrics) {
+      // Remove old metrics from the map as well
+      const removed = this.metrics.slice(0, this.metrics.length - this.maxStoredMetrics);
+      for (const metric of removed) {
+        this.metricsById.delete(metric.requestId);
+      }
       this.metrics = this.metrics.slice(-this.maxStoredMetrics);
     }
   }

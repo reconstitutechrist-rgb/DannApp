@@ -18,6 +18,7 @@ import { QuickStartTemplate } from "../components/QuickStartSelector";
 import { QualityReport } from "../utils/codeQuality";
 import { PerformanceReport } from "../utils/performanceOptimization";
 import { ArchitectureTemplate } from "../utils/architectureTemplates";
+import { DeploymentInstructions } from "../utils/exportApp";
 
 interface ChatSlice {
   chatMessages: ChatMessage[];
@@ -100,6 +101,7 @@ interface UISlice {
   setShowPerformanceReport: (show: boolean) => void;
 
   setShowPhasePreview: (show: boolean) => void;
+  setPhaseToPreview: (phase: BuildPhase | null) => void;
 
   setCurrentMode: (mode: "PLAN" | "ACT") => void;
   setGuidedBuildMode: (mode: boolean) => void;
@@ -119,9 +121,7 @@ interface DataSlice {
 
   // Staging
   newAppStagePlan: any;
-  showNewAppStagingModal: boolean;
   pendingNewAppRequest: string;
-  showTemplateSelector: boolean;
   selectedTemplate: ArchitectureTemplate | null;
   pendingTemplateRequest: string;
   currentStagePlan: any;
@@ -262,6 +262,7 @@ export const useAppStore = create<AppState>((set) => ({
   showPerformanceReport: false,
 
   showPhasePreview: false,
+  phaseToPreview: null,
 
   currentMode: "PLAN",
   guidedBuildMode: false,
@@ -284,6 +285,7 @@ export const useAppStore = create<AppState>((set) => ({
   setShowPerformanceReport: (show) => set({ showPerformanceReport: show }),
 
   setShowPhasePreview: (show) => set({ showPhasePreview: show }),
+  setPhaseToPreview: (phase) => set({ phaseToPreview: phase }),
 
   setCurrentMode: (mode) => set({ currentMode: mode }),
   setGuidedBuildMode: (mode) => set({ guidedBuildMode: mode }),
@@ -300,9 +302,7 @@ export const useAppStore = create<AppState>((set) => ({
   performanceReport: null,
 
   newAppStagePlan: null,
-  showNewAppStagingModal: false,
   pendingNewAppRequest: "",
-  showTemplateSelector: false,
   selectedTemplate: null,
   pendingTemplateRequest: "",
   currentStagePlan: null,

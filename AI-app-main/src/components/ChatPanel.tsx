@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { ChatMessage } from '../types/aiBuilderTypes';
 import PhaseProgress from './PhaseProgress';
 import StreamingProgressDisplay from './StreamingProgressDisplay';
@@ -48,13 +48,13 @@ export const ChatPanel = React.memo(function ChatPanel({
     }
   }, [messages]);
 
-  // Handle enter key
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  // Handle enter key - memoized to prevent unnecessary re-renders
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onSendMessage();
     }
-  };
+  }, [onSendMessage]);
 
   return (
     <div className="bg-neutral-925 rounded-lg border border-white/[0.06] overflow-hidden flex flex-col h-full">
